@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { AlgorithmManager } from '../features/algorithms/AlgorithmManager';
+import { RecordPracticeDialog } from '../features/practices/RecordPracticeDialog';
 
 const Page = ({ title }: { title: string }) => <main><h1>{title}</h1></main>;
 
 export function App() {
+  const [recording, setRecording] = useState(false);
+  const [revision, setRevision] = useState(0);
   return <div className="app-shell">
     <header>
       <strong>LC Board</strong>
@@ -12,12 +16,13 @@ export function App() {
         <NavLink to="/problems">题目记录</NavLink>
         <NavLink to="/data">数据管理</NavLink>
       </nav>
-      <button data-testid="record-practice" type="button">＋ 记录练习</button>
+      <button data-testid="record-practice" type="button" onClick={() => setRecording(true)}>＋ 记录练习</button>
     </header>
-    <Routes>
+    <Routes key={revision}>
       <Route path="/" element={<Page title="算法看板" />} />
       <Route path="/problems" element={<Page title="题目记录" />} />
       <Route path="/data" element={<AlgorithmManager />} />
     </Routes>
+    <RecordPracticeDialog open={recording} onClose={() => setRecording(false)} onSaved={() => setRevision(value => value + 1)} />
   </div>;
 }
