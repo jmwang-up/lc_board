@@ -27,6 +27,23 @@ function renderDialog(repo: DashboardRepository) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('RecordPracticeDialog', () => {
+  it('ignores metadata from a lookup invalidated by a URL edit', async () => {
+    let resolveLookup!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>(resolve => { resolveLookup = resolve; })));
+    renderDialog(repository());
+    const link = screen.getByLabelText('LeetCode 题目链接');
+    await userEvent.type(link, 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '读取题目信息' }));
+    await userEvent.clear(link);
+    await userEvent.type(link, 'https://leetcode.cn/problems/three-sum/');
+    resolveLookup(new Response(JSON.stringify({ slug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: 'https://leetcode.cn/problems/two-sum/' }), { status: 200 }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '读取题目信息' })).toBeEnabled());
+    expect(screen.queryByDisplayValue('两数之和')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+    expect(screen.getByLabelText('题号')).toHaveValue('');
+    expect(screen.getByLabelText('中文题名')).toHaveValue('');
+  });
+
   it('looks up a link and records a practice', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ slug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: 'https://leetcode.cn/problems/two-sum/' }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
     const repo = repository();
