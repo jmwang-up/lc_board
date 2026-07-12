@@ -14,9 +14,22 @@ describe('parseBackup', () => {
   });
 
   it.each([
+    'http://leetcode.cn/problems/two-sum/',
+    'https://example.com/problems/two-sum/',
+    'https://leetcode.cn.evil.example/problems/two-sum/',
+    'https://leetcode.cn/problemset/two-sum/',
+    'https://leetcode.cn/problems/two-sum/description/',
+    'https://leetcode.cn/problems/two-sum/?envType=daily-question',
+    'https://leetcode.cn/problems/two-sum/#description',
+    'https://leetcode.cn/problems/three-sum/',
+  ])('rejects a non-canonical or slug-mismatched stored problem URL: %s', url => {
+    expect(() => parseBackup(backup({ problems: [{ ...problem, url }] }))).toThrow('备份数据格式无效');
+  });
+
+  it.each([
     [{ schemaVersion: 2 }, '备份版本不受支持'],
     [{ problems: [problem, { ...problem }] }, '题目 ID 重复'],
-    [{ problems: [problem, { ...problem, id: 'other', leetcodeSlug: ' TWO-SUM ' }] }, '题目别名重复'],
+    [{ problems: [problem, { ...problem, id: 'other' }] }, '题目别名重复'],
     [{ algorithms: [algorithm, { ...algorithm, id: 'other', name: ' 哈希表 ' }] }, '算法名称重复'],
     [{ problems: [{ ...problem, createdAt: 'not-a-date' }] }, '备份数据格式无效'],
   ])('rejects invalid backup data', (change, message) => {
@@ -28,7 +41,7 @@ describe('mergeBackup', () => {
   it('maps imported problem and algorithm conflicts to local records', () => {
     const local = backup({ problems: [problem], algorithms: [algorithm] });
     const imported = backup({
-      problems: [{ ...problem, id: 'problem-imported', leetcodeSlug: ' TWO-SUM ' }],
+      problems: [{ ...problem, id: 'problem-imported' }],
       algorithms: [{ ...algorithm, id: 'algorithm-imported', name: ' 哈希表 ' }],
       practices: [{ ...practice, problemId: 'problem-imported', primaryAlgorithmId: 'algorithm-imported' }],
     });
@@ -40,7 +53,7 @@ describe('mergeBackup', () => {
   });
 
   it('rejects an ID collision that would silently remap a different entity', () => {
-    const importedProblem = { ...problem, leetcodeSlug: 'three-sum', titleZh: '三数之和' };
+    const importedProblem = { ...problem, leetcodeSlug: 'three-sum', titleZh: '三数之和', url: 'https://leetcode.cn/problems/three-sum/' };
     expect(() => mergeBackup(
       backup({ problems: [problem], algorithms: [algorithm] }),
       backup({ problems: [importedProblem], algorithms: [algorithm], practices: [practice] }),
@@ -48,9 +61,33 @@ describe('mergeBackup', () => {
   });
 
   it('skips an unreferenced imported entity whose ID already exists locally', () => {
-    const importedProblem = { ...problem, leetcodeSlug: 'three-sum', titleZh: '三数之和' };
+    const importedProblem = { ...problem, leetcodeSlug: 'three-sum', titleZh: '三数之和', url: 'https://leetcode.cn/problems/three-sum/' };
     const result = mergeBackup(backup({ problems: [problem] }), backup({ problems: [importedProblem] }));
     expect(result.problems).toEqual([problem]);
     expect(result.summary.skippedIds).toContain(problem.id);
+  });
+
+  it('maps a colliding problem ID to a different local record with the same slug', () => {
+    const collidingLocal = { ...problem, leetcodeSlug: 'three-sum', titleZh: '三数之和', url: 'https://leetcode.cn/problems/three-sum/' };
+    const semanticLocal = { ...problem, id: 'problem-semantic' };
+    const imported = { ...problem, titleZh: 'imported title' };
+    const result = mergeBackup(
+      backup({ problems: [collidingLocal, semanticLocal], algorithms: [algorithm] }),
+      backup({ problems: [imported], algorithms: [algorithm], practices: [practice] }),
+    );
+    expect(result.practices.at(-1)?.problemId).toBe(semanticLocal.id);
+    expect(result.summary).toMatchObject({ addedProblems: 0, addedPractices: 1, skippedIds: [problem.id, algorithm.id] });
+  });
+
+  it('maps a colliding algorithm ID to a different local record with the same normalized name', () => {
+    const collidingLocal = { ...algorithm, name: '动态规划' };
+    const semanticLocal = { ...algorithm, id: 'algorithm-semantic' };
+    const imported = { ...algorithm, name: ' 哈希表 ' };
+    const result = mergeBackup(
+      backup({ problems: [problem], algorithms: [collidingLocal, semanticLocal] }),
+      backup({ problems: [problem], algorithms: [imported], practices: [practice] }),
+    );
+    expect(result.practices.at(-1)?.primaryAlgorithmId).toBe(semanticLocal.id);
+    expect(result.summary).toMatchObject({ addedAlgorithms: 0, addedPractices: 1, skippedIds: [problem.id, algorithm.id] });
   });
 });
