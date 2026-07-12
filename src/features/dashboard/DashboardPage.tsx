@@ -6,17 +6,27 @@ import { EmptyState } from '../../shared/ui/EmptyState';
 import { ActivityCalendar } from './ActivityCalendar';
 
 const emptyDataset: DashboardDataset = { algorithms: [], problems: [], practices: [] };
+type LoadState = { status: 'loading' } | { status: 'error' } | { status: 'data'; dataset: DashboardDataset };
 
 export function DashboardPage() {
   const repository = useRepository();
-  const [dataset, setDataset] = useState<DashboardDataset | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>({ status: 'loading' });
+  const [loadAttempt, setLoadAttempt] = useState(0);
   useEffect(() => {
     let active = true;
+    setLoadState({ status: 'loading' });
     Promise.all([repository.listAlgorithms(), repository.listProblems(), repository.listPractices()])
-      .then(([algorithms, problems, practices]) => active && setDataset({ algorithms, problems, practices }));
+      .then(([algorithms, problems, practices]) => {
+        if (active) setLoadState({ status: 'data', dataset: { algorithms, problems, practices } });
+      })
+      .catch(() => {
+        if (active) setLoadState({ status: 'error' });
+      });
     return () => { active = false; };
-  }, [repository]);
-  if (!dataset) return <main><h1>算法看板</h1><p>正在加载…</p></main>;
+  }, [repository, loadAttempt]);
+  if (loadState.status === 'loading') return <main><h1>算法看板</h1><p>正在加载…</p></main>;
+  if (loadState.status === 'error') return <main><h1>算法看板</h1><section role="alert" className="load-error"><h2>算法看板加载失败</h2><p>暂时无法读取本地数据，请重试。</p><button type="button" onClick={() => setLoadAttempt(value => value + 1)}>重新加载</button></section></main>;
+  const { dataset } = loadState;
   const snapshot = buildDashboardSnapshot(dataset ?? emptyDataset);
   const problemsById = new Map(dataset.problems.map(problem => [problem.id, problem]));
   const algorithmsById = new Map(dataset.algorithms.map(algorithm => [algorithm.id, algorithm]));

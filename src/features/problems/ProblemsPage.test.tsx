@@ -59,3 +59,22 @@ it('shows only the requested problem on the detail route', async () => {
   expect(screen.queryByText('两数之和')).not.toBeInTheDocument();
   expect(screen.getByRole('list', { name: '寻找峰值的练习记录' })).toBeInTheDocument();
 });
+
+it.each([
+  ['/problems', <ProblemsPage />],
+  ['/problems/p2', <Routes><Route path="/problems/:problemId" element={<ProblemsPage />} /></Routes>],
+])('replaces loading with an actionable alert when loading %s fails', async (entry, page) => {
+  const failingRepository = { ...repository, listPractices: async () => { throw new Error('storage unavailable'); } };
+  render(<RepositoryProvider repository={failingRepository}><MemoryRouter initialEntries={[entry]}>{page}</MemoryRouter></RepositoryProvider>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('题目记录加载失败');
+  expect(screen.getByRole('button', { name: '重新加载' })).toBeInTheDocument();
+  expect(screen.queryByText('正在加载…')).not.toBeInTheDocument();
+});
+
+it('replaces dashboard loading with an actionable alert when loading fails', async () => {
+  const failingRepository = { ...repository, listAlgorithms: async () => { throw new Error('storage unavailable'); } };
+  render(<RepositoryProvider repository={failingRepository}><MemoryRouter><DashboardPage /></MemoryRouter></RepositoryProvider>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('算法看板加载失败');
+  expect(screen.getByRole('button', { name: '重新加载' })).toBeInTheDocument();
+  expect(screen.queryByText('正在加载…')).not.toBeInTheDocument();
+});
