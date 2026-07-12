@@ -30,6 +30,8 @@ function fakeRepository(initialAlgorithms: Algorithm[] = [], practices: Practice
     async listProblems() { return []; },
     async deletePractice() {},
     async deleteProblem() {},
+    async exportBackup() { return { schemaVersion: 1, exportedAt: new Date().toISOString(), problems: [], practices: [], algorithms: [] }; },
+    async importBackup() { return { addedProblems: 0, addedPractices: 0, addedAlgorithms: 0, skippedIds: [] }; },
     async clearAll() {},
   };
 }

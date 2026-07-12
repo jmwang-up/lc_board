@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardDatabase } from './DashboardDatabase';
 import { DexieDashboardRepository } from './DexieDashboardRepository';
 
@@ -85,6 +85,32 @@ describe('algorithm invariants', () => {
 });
 
 describe('deletion invariants', () => {
+  it('clears problems, practices, and algorithms together', async () => {
+    const timestamp = '2026-07-12T00:00:00.000Z';
+    await database.problems.add({ id: 'problem', leetcodeSlug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: metadata.url, createdAt: timestamp });
+    await database.algorithms.add({ id: 'algorithm', name: '双指针', color: '#2563eb', createdAt: timestamp });
+    await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp });
+
+    await repo.clearAll();
+
+    expect(await repo.listProblems()).toEqual([]);
+    expect(await repo.listPractices()).toEqual([]);
+    expect(await repo.listAlgorithms()).toEqual([]);
+  });
+
+  it('rolls back every clear when one table clear fails', async () => {
+    const timestamp = '2026-07-12T00:00:00.000Z';
+    await database.problems.add({ id: 'problem', leetcodeSlug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: metadata.url, createdAt: timestamp });
+    await database.algorithms.add({ id: 'algorithm', name: '双指针', color: '#2563eb', createdAt: timestamp });
+    await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp });
+    vi.spyOn(database.algorithms, 'clear').mockRejectedValueOnce(new Error('clear failed'));
+
+    await expect(repo.clearAll()).rejects.toThrow('clear failed');
+
+    expect(await repo.listProblems()).toHaveLength(1);
+    expect(await repo.listPractices()).toHaveLength(1);
+    expect(await repo.listAlgorithms()).toHaveLength(1);
+  });
   it('deleting one practice preserves its problem', async () => {
     const algorithm = await repo.createAlgorithm({ name: '双指针', color: '#2563eb' });
     const { practice } = await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
@@ -104,5 +130,41 @@ describe('deletion invariants', () => {
 
     expect(await repo.listProblems()).toEqual([]);
     expect(await repo.listPractices()).toEqual([]);
+  });
+});
+
+describe('backup invariants', () => {
+  it('exports a schema-versioned consistent snapshot', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '哈希表', color: '#16a34a' });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
+
+    const result = await repo.exportBackup();
+
+    expect(result).toMatchObject({ schemaVersion: 1, problems: [expect.any(Object)], practices: [expect.any(Object)], algorithms: [expect.any(Object)] });
+    expect(() => new Date(result.exportedAt).toISOString()).not.toThrow();
+  });
+
+  it('imports remapped additions and returns a summary', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '哈希表', color: '#16a34a' });
+    const { problem } = await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
+    const timestamp = '2026-07-13T00:00:00.000Z';
+
+    const summary = await repo.importBackup({
+      schemaVersion: 1, exportedAt: timestamp,
+      problems: [{ ...problem, id: 'import-problem' }],
+      algorithms: [{ ...algorithm, id: 'import-algorithm' }],
+      practices: [{ id: 'import-practice', problemId: 'import-problem', practicedOn: '2026-07-13', primaryAlgorithmId: 'import-algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp }],
+    });
+
+    expect(summary).toMatchObject({ addedProblems: 0, addedAlgorithms: 0, addedPractices: 1 });
+    expect((await repo.listPractices()).at(-1)).toMatchObject({ problemId: problem.id, primaryAlgorithmId: algorithm.id });
+  });
+
+  it('does not write anything when an import is invalid', async () => {
+    await expect(repo.importBackup({ schemaVersion: 1, exportedAt: '2026-07-12T00:00:00.000Z', problems: [], algorithms: [], practices: [{ id: 'p', problemId: 'missing' }] } as never))
+      .rejects.toThrow();
+    expect(await repo.listProblems()).toEqual([]);
+    expect(await repo.listPractices()).toEqual([]);
+    expect(await repo.listAlgorithms()).toEqual([]);
   });
 });

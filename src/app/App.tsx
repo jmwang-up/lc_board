@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
-import { AlgorithmManager } from '../features/algorithms/AlgorithmManager';
+import { DataManagementPage } from '../features/data-management/DataManagementPage';
 import { RecordPracticeDialog } from '../features/practices/RecordPracticeDialog';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { ProblemsPage } from '../features/problems/ProblemsPage';
@@ -22,7 +22,7 @@ export function App() {
       <Route path="/" element={<DashboardPage />} />
       <Route path="/problems" element={<ProblemsPage />} />
       <Route path="/problems/:problemId" element={<ProblemsPage />} />
-      <Route path="/data" element={<AlgorithmManager />} />
+      <Route path="/data" element={<DataManagementPage />} />
     </Routes>
     <RecordPracticeDialog open={recording} onClose={() => setRecording(false)} onSaved={() => setRevision(value => value + 1)} />
   </div>;
