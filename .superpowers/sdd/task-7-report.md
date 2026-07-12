@@ -25,3 +25,14 @@
 ## Concerns
 
 - `npm run lint` cannot run because the repository has no `eslint.config.js`; installed ESLint 10 no longer reads legacy configuration by default. No lint tooling was changed because it is outside Task 7.
+
+## Review Fixes
+
+- RED: eight canonical URL rejection cases and two semantic-first ID-collision remapping cases failed against commit `b89cc6e3970854d86d921ba50e483d6eb8498e8f`.
+- GREEN: stored problem URLs now require the exact canonical `https://leetcode.cn/problems/<leetcodeSlug>/` form; semantic slug/name matches now take precedence over unrelated same-ID locals, while unresolved referenced collisions still reject before writes.
+- Focused evidence: `npm test -- src/domain/backup.test.ts src/db/DexieDashboardRepository.test.ts src/features/data-management/DataManagementPage.test.tsx` — 3 files, 36 tests passed.
+- Full evidence: `npm test` — 10 files, 65 tests passed (with permission for Supertest's temporary local listener).
+- Build evidence: `npm run build` — passed.
+- Diff evidence: `git diff --check` — passed.
+- Review-fix implementation commit: `7f8b208a0f208a5831506f937435260f4d5d387e`.
+- Remaining concern: lint remains unavailable due to the missing ESLint 10 flat configuration noted above.
