@@ -1,4 +1,5 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
+import { AlgorithmManager } from '../features/algorithms/AlgorithmManager';
 
 const Page = ({ title }: { title: string }) => <main><h1>{title}</h1></main>;
 
@@ -16,7 +17,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<Page title="算法看板" />} />
       <Route path="/problems" element={<Page title="题目记录" />} />
-      <Route path="/data" element={<Page title="数据管理" />} />
+      <Route path="/data" element={<AlgorithmManager />} />
     </Routes>
   </div>;
 }
