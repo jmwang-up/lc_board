@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryProvider } from '../../app/RepositoryContext';
 import type { DashboardRepository } from '../../db/DashboardRepository';
 import { RecordPracticeDialog } from './RecordPracticeDialog';
+import { practiceFormSchema } from './PracticeForm';
 
 function repository(algorithm = true): DashboardRepository {
   return {
@@ -79,5 +80,61 @@ describe('RecordPracticeDialog', () => {
     renderDialog(repository(false));
     expect(await screen.findByRole('link', { name: '前往数据管理创建算法分类' })).toHaveAttribute('href', '/data');
     expect(screen.queryByLabelText('主要算法')).not.toBeInTheDocument();
+  });
+
+  it('replaces form metadata when a second URL is looked up', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ slug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: 'https://leetcode.cn/problems/two-sum/' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ slug: 'three-sum', frontendQuestionId: '15', titleZh: '三数之和', difficulty: 'medium', url: 'https://leetcode.cn/problems/three-sum/' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    const repo = repository();
+    renderDialog(repo);
+    const link = screen.getByLabelText('LeetCode 题目链接');
+    await userEvent.type(link, 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '读取题目信息' }));
+    expect(await screen.findByDisplayValue('两数之和')).toBeInTheDocument();
+    await userEvent.clear(link);
+    await userEvent.type(link, 'https://leetcode.cn/problems/three-sum/description/');
+    await userEvent.click(screen.getByRole('button', { name: '读取题目信息' }));
+    expect(await screen.findByDisplayValue('三数之和')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('主要算法'), 'alg-1');
+    await userEvent.click(screen.getByRole('button', { name: '保存练习' }));
+    await waitFor(() => expect(repo.recordPractice).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ slug: 'three-sum', frontendQuestionId: '15', titleZh: '三数之和' }) })));
+  });
+
+  it('clears successful metadata when the next lookup fails', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ slug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: 'https://leetcode.cn/problems/two-sum/' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 'UPSTREAM_TIMEOUT' }), { status: 502 })));
+    renderDialog(repository());
+    const link = screen.getByLabelText('LeetCode 题目链接');
+    await userEvent.type(link, 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '读取题目信息' }));
+    expect(await screen.findByDisplayValue('两数之和')).toBeInTheDocument();
+    await userEvent.clear(link);
+    await userEvent.type(link, 'https://leetcode.cn/problems/three-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '读取题目信息' }));
+    expect(await screen.findByText('自动读取失败，可以手动填写')).toBeInTheDocument();
+    expect(screen.getByLabelText('题号')).toHaveValue('');
+    expect(screen.getByLabelText('中文题名')).toHaveValue('');
+    expect(screen.getByLabelText('中文题名')).toBeEnabled();
+  });
+
+  it('rejects repeated secondary algorithms in the schema', () => {
+    const result = practiceFormSchema.safeParse({ url: 'https://leetcode.cn/problems/two-sum/', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', practicedOn: '2026-07-12', primaryAlgorithmId: 'alg-1', secondaryAlgorithmIds: ['alg-2', 'alg-2'] });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path: ['secondaryAlgorithmIds'], message: '辅助算法不能重复' })]));
+  });
+
+  it('shows validation when the primary algorithm is also secondary', async () => {
+    renderDialog(repository());
+    await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+    await userEvent.type(screen.getByLabelText('题号'), '1');
+    await userEvent.type(screen.getByLabelText('中文题名'), '两数之和');
+    await userEvent.selectOptions(screen.getByLabelText('主要算法'), 'alg-1');
+    await userEvent.click(screen.getByRole('checkbox', { name: '哈希表' }));
+    await userEvent.click(screen.getByRole('button', { name: '保存练习' }));
+    expect(await screen.findByText('辅助算法不能与主要算法重复')).toBeInTheDocument();
   });
 });

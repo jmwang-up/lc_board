@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { Algorithm } from '../../domain/models';
@@ -14,15 +15,19 @@ export const practiceFormSchema = z.object({
   secondaryAlgorithmIds: z.array(z.string()),
 }).superRefine((value, ctx) => {
   if (value.secondaryAlgorithmIds.includes(value.primaryAlgorithmId)) ctx.addIssue({ code: 'custom', path: ['secondaryAlgorithmIds'], message: '辅助算法不能与主要算法重复' });
+  if (new Set(value.secondaryAlgorithmIds).size !== value.secondaryAlgorithmIds.length) ctx.addIssue({ code: 'custom', path: ['secondaryAlgorithmIds'], message: '辅助算法不能重复' });
 });
 
 export type PracticeFormValues = z.infer<typeof practiceFormSchema>;
 
 export function PracticeForm({ algorithms, values, saving, saveError, onSubmit }: { algorithms: Algorithm[]; values: Partial<PracticeFormValues>; saving: boolean; saveError?: string; onSubmit: (values: PracticeFormValues) => Promise<void> }) {
-  const { register, handleSubmit, formState: { errors } } = useForm<PracticeFormValues>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<PracticeFormValues>({
     resolver: zodResolver(practiceFormSchema),
     defaultValues: { difficulty: 'easy', practicedOn: localToday(), secondaryAlgorithmIds: [], ...values },
   });
+  useEffect(() => {
+    reset({ difficulty: 'easy', practicedOn: localToday(), secondaryAlgorithmIds: [], ...values });
+  }, [reset, values.url, values.frontendQuestionId, values.titleZh, values.difficulty]);
   const error = Object.values(errors)[0]?.message;
   return <form onSubmit={handleSubmit(onSubmit)}>
     <label>题号<input {...register('frontendQuestionId')} /></label>

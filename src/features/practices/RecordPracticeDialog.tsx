@@ -23,6 +23,7 @@ export function RecordPracticeDialog({ open, onClose, onSaved }: { open: boolean
 
   async function lookup() {
     setLookupError('');
+    setMetadata(undefined);
     let parsed: ReturnType<typeof parseLeetCodeCnUrl>;
     try { parsed = parseLeetCodeCnUrl(url); setUrl(parsed.url); }
     catch (error) { setLookupError(error instanceof Error ? error.message : '链接无效'); return; }
@@ -45,7 +46,7 @@ export function RecordPracticeDialog({ open, onClose, onSaved }: { open: boolean
   return <div role="dialog" aria-modal="true" aria-labelledby="record-practice-title">
     <h2 id="record-practice-title">记录练习</h2>
     <button type="button" aria-label="关闭" onClick={onClose}>×</button>
-    <label>LeetCode 题目链接<input value={url} onChange={event => setUrl(event.target.value)} /></label>
+    <label>LeetCode 题目链接<input value={url} onChange={event => { setUrl(event.target.value); setMetadata(undefined); }} /></label>
     <button type="button" disabled={lookingUp} onClick={() => void lookup()}>{lookingUp ? '读取中…' : '读取题目信息'}</button>
     <button type="button" onClick={() => { try { const parsed = parseLeetCodeCnUrl(url); setUrl(parsed.url); setLookupError(''); setManual(true); } catch (error) { setLookupError(error instanceof Error ? error.message : '链接无效'); } }}>手动填写</button>
     {lookupError && <p role="alert">{lookupError}</p>}
