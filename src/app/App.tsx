@@ -9,10 +9,7 @@ export function App() {
   const [recording, setRecording] = useState(false);
   const [revision, setRevision] = useState(0);
   const recordButton = useRef<HTMLButtonElement>(null);
-  const closeRecording = () => {
-    setRecording(false);
-    requestAnimationFrame(() => recordButton.current?.focus());
-  };
+  const closeRecording = () => setRecording(false);
   return <div className="app-shell">
     <header>
       <strong>LC Board</strong>

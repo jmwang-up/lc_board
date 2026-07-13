@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useRepository } from '../../app/RepositoryContext';
 import { parseLeetCodeCnUrl } from '../../domain/leetcode';
 import type { ProblemMetadata } from '../../domain/models';
+import { Modal } from '../../shared/ui/Modal';
 import { useAlgorithms } from '../algorithms/useAlgorithms';
 import { fetchProblemMetadata } from './metadataClient';
 import { PracticeForm, type PracticeFormValues } from './PracticeForm';
@@ -30,13 +31,6 @@ export function RecordPracticeDialog({ open, onClose, onSaved }: { open: boolean
   useEffect(() => () => { lookupController.current?.abort(); lookupSequence.current += 1; }, []);
   useEffect(() => { if (!open) { invalidateLookup(); setUrl(''); setMetadata(undefined); setManual(false); setLookupError(''); setSaveError(''); } }, [open]);
   useEffect(() => { if (open) void reload(); }, [open, reload]);
-  useEffect(() => {
-    if (!open) return;
-    urlInput.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [open, onClose]);
   if (!open) return null;
 
   async function lookup() {
@@ -72,7 +66,7 @@ export function RecordPracticeDialog({ open, onClose, onSaved }: { open: boolean
     finally { setSaving(false); }
   }
 
-  return <div className="dialog-backdrop" role="presentation"><div className="dialog-panel" role="dialog" aria-modal="true" aria-labelledby="record-practice-title">
+  return <Modal ariaLabelledBy="record-practice-title" initialFocusRef={urlInput} onClose={onClose}>
     <h2 id="record-practice-title">记录练习</h2>
     <button type="button" aria-label="关闭" onClick={onClose}>×</button>
     <label>LeetCode 题目链接<input ref={urlInput} value={url} onChange={event => { invalidateLookup(); setLookingUp(false); setUrl(event.target.value); setMetadata(undefined); }} /></label>
@@ -82,5 +76,5 @@ export function RecordPracticeDialog({ open, onClose, onSaved }: { open: boolean
     {loadError && <p role="alert">{loadError}</p>}
     {!loading && !loadError && algorithms.length === 0 && <p>还没有算法分类，<Link to="/data" onClick={onClose}>前往数据管理创建算法分类</Link></p>}
     {manual && algorithms.length > 0 && <PracticeForm algorithms={algorithms} values={{ url, frontendQuestionId: metadata?.frontendQuestionId ?? '', titleZh: metadata?.titleZh ?? '', difficulty: metadata?.difficulty ?? 'easy' }} saving={saving} saveError={saveError} onSubmit={save} />}
-  </div></div>;
+  </Modal>;
 }

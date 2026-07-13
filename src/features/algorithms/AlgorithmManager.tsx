@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { useRepository } from '../../app/RepositoryContext';
 import type { Algorithm } from '../../domain/models';
+import { Modal } from '../../shared/ui/Modal';
 import { useAlgorithms } from './useAlgorithms';
 
 const messageFor = (cause: unknown, fallback: string) => cause instanceof Error ? cause.message : fallback;
@@ -18,18 +19,11 @@ export function AlgorithmManager() {
   const [affectedCount, setAffectedCount] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const deleteTrigger = useRef<HTMLButtonElement | null>(null);
+  const replacementSelect = useRef<HTMLSelectElement>(null);
 
   function closeDelete() {
     setDeleting(null);
-    deleteTrigger.current?.focus();
   }
-
-  useEffect(() => {
-    if (!deleting) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeDelete(); };
-    document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [deleting]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -112,16 +106,16 @@ export function AlgorithmManager() {
         </>}
       </li>)}</ul>
     </section>
-    {deleting && <div role="dialog" aria-modal="true" aria-labelledby="delete-heading">
+    {deleting && <Modal ariaLabelledBy="delete-heading" initialFocusRef={replacementSelect} onClose={closeDelete} returnFocusRef={deleteTrigger}>
       <h2 id="delete-heading">删除{deleting.name}</h2>
       <p>{affectedCount} 条练习将被更新</p>
-      <label>替代算法<select value={replacementId} onChange={event => setReplacementId(event.target.value)}>
+      <label>替代算法<select ref={replacementSelect} value={replacementId} onChange={event => setReplacementId(event.target.value)}>
         <option value="">请选择</option>
         {algorithms.filter(item => item.id !== deleting.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select></label>
       <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />我确认更新 {affectedCount} 条练习并删除{deleting.name}</label>
       <button type="button" disabled={!replacementId || replacementId === deleting.id || !confirmed} onClick={() => void replaceAndDelete()}>替换并删除</button>
       <button type="button" onClick={closeDelete}>取消</button>
-    </div>}
+    </Modal>}
   </main>;
 }

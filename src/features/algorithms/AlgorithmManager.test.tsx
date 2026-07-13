@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RepositoryProvider } from '../../app/RepositoryContext';
 import type { DashboardRepository } from '../../db/DashboardRepository';
@@ -103,4 +103,20 @@ it('closes the deletion dialog with Escape and restores focus', async () => {
   await userEvent.keyboard('{Escape}');
   expect(screen.queryByRole('dialog', { name: '删除动态规划' })).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();
+});
+
+it('focuses and contains keyboard navigation inside the deletion dialog', async () => {
+  const { container } = renderManagerWithRepository(fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')]));
+  await userEvent.click(await screen.findByRole('button', { name: '删除动态规划' }));
+  const dialog = screen.getByRole('dialog', { name: '删除动态规划' });
+  const replacement = within(dialog).getByLabelText('替代算法');
+  const cancel = within(dialog).getByRole('button', { name: '取消' });
+
+  await waitFor(() => expect(replacement).toHaveFocus());
+  expect(container).toHaveAttribute('inert');
+  cancel.focus();
+  await userEvent.tab();
+  expect(replacement).toHaveFocus();
+  await userEvent.tab({ shift: true });
+  expect(cancel).toHaveFocus();
 });

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -21,8 +21,8 @@ function repository(algorithm = true): DashboardRepository {
 function renderDialog(repo: DashboardRepository) {
   const onClose = vi.fn();
   const onSaved = vi.fn();
-  render(<RepositoryProvider repository={repo}><MemoryRouter><RecordPracticeDialog open onClose={onClose} onSaved={onSaved} /></MemoryRouter></RepositoryProvider>);
-  return { onClose, onSaved };
+  const result = render(<><button type="button">背景操作</button><RepositoryProvider repository={repo}><MemoryRouter><RecordPracticeDialog open onClose={onClose} onSaved={onSaved} /></MemoryRouter></RepositoryProvider></>);
+  return { ...result, onClose, onSaved };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -154,5 +154,21 @@ describe('RecordPracticeDialog', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: '哈希表' }));
     await userEvent.click(screen.getByRole('button', { name: '保存练习' }));
     expect(await screen.findByText('辅助算法不能与主要算法重复')).toBeInTheDocument();
+  });
+
+  it('focuses and contains keyboard navigation inside the record dialog', async () => {
+    const { container } = renderDialog(repository());
+    const dialog = screen.getByRole('dialog', { name: '记录练习' });
+    const link = within(dialog).getByLabelText('LeetCode 题目链接');
+    const close = within(dialog).getByRole('button', { name: '关闭' });
+    const manual = within(dialog).getByRole('button', { name: '手动填写' });
+
+    await waitFor(() => expect(link).toHaveFocus());
+    expect(container).toHaveAttribute('inert');
+    manual.focus();
+    await userEvent.tab();
+    expect(close).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(manual).toHaveFocus();
   });
 });

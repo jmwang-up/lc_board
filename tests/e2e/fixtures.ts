@@ -7,17 +7,18 @@ export async function createAlgorithm(page: Page, name: string) {
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 }
 
-export async function recordProblem(page: Page, input: { url: string; primary: string; secondary?: string[]; date: string }) {
+export async function recordProblem(page: Page, input: { url: string; title: string; primary: string; secondary?: string[]; date: string }) {
   await page.getByTestId('record-practice').click();
   const dialog = page.getByRole('dialog', { name: '记录练习' });
   await dialog.getByLabel('LeetCode 题目链接').fill(input.url);
   await dialog.getByRole('button', { name: '读取题目信息' }).click();
-  await expect(dialog.getByLabel('中文题名')).toHaveValue('两数之和');
+  await expect(dialog.getByLabel('中文题名')).toHaveValue(input.title);
   await dialog.getByLabel('练习日期').fill(input.date);
   await dialog.getByLabel('主要算法').selectOption({ label: input.primary });
   for (const name of input.secondary ?? []) await dialog.getByRole('checkbox', { name }).check();
   await dialog.getByRole('button', { name: '保存练习' }).click();
   await expect(dialog).toBeHidden();
+  await expect(page.getByTestId('record-practice')).toBeFocused();
 }
 
 export async function exportBackup(page: Page): Promise<Download> {
@@ -35,5 +36,5 @@ export async function clearAllData(page: Page, confirmation: string) {
 
 export async function importBackup(page: Page, path: string) {
   await page.getByLabel('选择备份文件').setInputFiles(path);
-  await expect(page.getByRole('status')).toContainText('导入成功');
+  await expect(page.getByRole('status')).toHaveText('导入成功：新增 2 道题目、3 条练习、2 个算法');
 }
