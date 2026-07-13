@@ -20,6 +20,11 @@ a {
   font: inherit;
 }
 
+button:disabled { cursor: not-allowed; opacity: .55; }
+input, select { font: inherit; }
+label { display: grid; gap: .35rem; margin-block: .65rem; }
+input:not([type="checkbox"]):not([type="color"]), select { padding: .65rem; border: 1px solid #cdd2df; border-radius: .4rem; background: #fff; }
+
 :focus-visible {
   outline: 3px solid #6d5dfc;
   outline-offset: 3px;
@@ -119,6 +124,13 @@ a {
 .problem-table h2 { margin: 0; font-size: 1rem; }
 .load-error { padding: 1.5rem; color: #8a1c1c; background: #fff4f4; border: 1px solid #e7aaaa; border-radius: .75rem; }
 .load-error h2 { margin-top: 0; }
+.dialog-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 1rem; background: rgb(23 32 51 / 55%); }
+.dialog-panel { width: min(36rem, 100%); max-height: calc(100vh - 2rem); overflow: auto; padding: 1.5rem; background: #fff; border-radius: .85rem; box-shadow: 0 1.25rem 4rem rgb(23 32 51 / 25%); }
+.dialog-panel h2 { margin-top: 0; }
+.dialog-panel form { display: grid; gap: .35rem; }
+.dialog-panel fieldset { border: 1px solid #cdd2df; border-radius: .5rem; }
+.dialog-panel fieldset label { display: inline-flex; margin-right: 1rem; }
+[role="alert"] { color: #8a1c1c; }
 
 @media (max-width: 768px) {
   .app-shell > header {

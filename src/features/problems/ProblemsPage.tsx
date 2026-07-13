@@ -43,7 +43,8 @@ export function ProblemsPage() {
   const items = problemId ? filteredItems.filter(item => item.problem.id === problemId) : filteredItems;
   const update = (name: string, value: string) => {
     const next = new URLSearchParams(params);
-    value ? next.set(name, value) : next.delete(name);
+    if (value) next.set(name, value);
+    else next.delete(name);
     setParams(next);
   };
   const isExpanded = (id: string) => problemId === id || expanded.includes(id);

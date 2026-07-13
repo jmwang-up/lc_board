@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRepository } from '../../app/RepositoryContext';
 import type { Algorithm } from '../../domain/models';
 import { useAlgorithms } from './useAlgorithms';
@@ -7,7 +7,7 @@ const messageFor = (cause: unknown, fallback: string) => cause instanceof Error 
 
 export function AlgorithmManager() {
   const repository = useRepository();
-  const { algorithms, reload, loading } = useAlgorithms();
+  const { algorithms, reload, loading, loadError } = useAlgorithms();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#2563eb');
   const [error, setError] = useState('');
@@ -17,6 +17,19 @@ export function AlgorithmManager() {
   const [replacementId, setReplacementId] = useState('');
   const [affectedCount, setAffectedCount] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
+  const deleteTrigger = useRef<HTMLButtonElement | null>(null);
+
+  function closeDelete() {
+    setDeleting(null);
+    deleteTrigger.current?.focus();
+  }
+
+  useEffect(() => {
+    if (!deleting) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeDelete(); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [deleting]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -50,6 +63,7 @@ export function AlgorithmManager() {
   }
 
   async function beginDelete(algorithm: Algorithm) {
+    deleteTrigger.current = document.activeElement as HTMLButtonElement;
     setError('');
     try {
       const practices = await repository.listPractices();
@@ -67,7 +81,7 @@ export function AlgorithmManager() {
     setError('');
     try {
       await repository.replaceAndDeleteAlgorithm(deleting.id, replacementId);
-      setDeleting(null);
+      closeDelete();
       await reload();
     } catch (cause) {
       setError(messageFor(cause, '删除算法失败'));
@@ -84,7 +98,8 @@ export function AlgorithmManager() {
         <button disabled={loading || !name.trim()}>创建分类</button>
       </form>
       {error && <p role="alert">{error}</p>}
-      {!loading && algorithms.length === 0 && <p>还没有算法分类，请先创建一个。</p>}
+      {loadError && <p role="alert">{loadError}</p>}
+      {!loading && !loadError && algorithms.length === 0 && <p>还没有算法分类，请先创建一个。</p>}
       <ul>{algorithms.map(algorithm => <li key={algorithm.id}>
         {renaming?.id === algorithm.id ? <form onSubmit={rename}>
           <label>重命名{algorithm.name}<input value={renameName} onChange={event => setRenameName(event.target.value)} /></label>
@@ -106,7 +121,7 @@ export function AlgorithmManager() {
       </select></label>
       <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />我确认更新 {affectedCount} 条练习并删除{deleting.name}</label>
       <button type="button" disabled={!replacementId || replacementId === deleting.id || !confirmed} onClick={() => void replaceAndDelete()}>替换并删除</button>
-      <button type="button" onClick={() => setDeleting(null)}>取消</button>
+      <button type="button" onClick={closeDelete}>取消</button>
     </div>}
   </main>;
 }

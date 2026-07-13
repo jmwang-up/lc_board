@@ -52,6 +52,14 @@ it('creates a category and rejects a duplicate normalized name', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('算法名称已存在');
 });
 
+it('shows a localized actionable error when algorithms cannot be loaded', async () => {
+  const repo = fakeRepository();
+  repo.listAlgorithms = async () => { throw new Error('storage unavailable'); };
+  renderManagerWithRepository(repo);
+  expect(await screen.findByRole('alert')).toHaveTextContent('算法分类加载失败，请重试');
+  expect(screen.queryByText('还没有算法分类，请先创建一个。')).not.toBeInTheDocument();
+});
+
 it('renames a category inline', async () => {
   renderManagerWithRepository(fakeRepository([algorithm('dp', '动态规划')]));
   expect(await screen.findByText('动态规划')).toBeInTheDocument();
@@ -69,7 +77,8 @@ it('requires a distinct replacement and confirmation with the affected practice 
     { id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' },
     { id: 'p2', problemId: 'two', practicedOn: '2026-07-12', primaryAlgorithmId: 'graph', secondaryAlgorithmIds: ['dp'], createdAt: '', updatedAt: '' },
   ];
-  renderManagerWithRepository(fakeRepository(algorithms, practices));
+  const repo = fakeRepository(algorithms, practices);
+  renderManagerWithRepository(repo);
   expect(await screen.findByText('动态规划')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '删除动态规划' }));
   const dialog = screen.getByRole('dialog', { name: '删除动态规划' });
@@ -83,4 +92,15 @@ it('requires a distinct replacement and confirmation with the affected practice 
   await userEvent.click(remove);
   expect(await screen.findByText('图论')).toBeInTheDocument();
   expect(screen.queryByText('动态规划')).not.toBeInTheDocument();
+  expect((await repo.listAlgorithms()).map(item => item.id)).not.toContain('dp');
+});
+
+it('closes the deletion dialog with Escape and restores focus', async () => {
+  renderManagerWithRepository(fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')]));
+  const trigger = await screen.findByRole('button', { name: '删除动态规划' });
+  await userEvent.click(trigger);
+  expect(screen.getByRole('dialog', { name: '删除动态规划' })).toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByRole('dialog', { name: '删除动态规划' })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
 });

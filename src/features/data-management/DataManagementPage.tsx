@@ -46,7 +46,7 @@ export function DataManagementPage() {
       let json: unknown;
       try { json = JSON.parse(await file.text()); } catch { throw new Error('备份文件无效'); }
       let backup;
-      try { backup = parseBackup(json); } catch (cause) { throw new Error(messageFor(cause, '备份文件无效')); }
+      try { backup = parseBackup(json); } catch (cause) { throw new Error(messageFor(cause, '备份文件无效'), { cause }); }
       const summary = await repository.importBackup(backup);
       setMessage(`导入成功：新增 ${summary.addedProblems} 道题目、${summary.addedPractices} 条练习、${summary.addedAlgorithms} 个算法`);
     } catch (cause) {

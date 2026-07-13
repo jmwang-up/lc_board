@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Algorithm, Practice, Problem } from './models';
+import type { Algorithm, Problem } from './models';
 
 const isoDateTime = z.string().datetime();
 const id = z.string().trim().min(1);
