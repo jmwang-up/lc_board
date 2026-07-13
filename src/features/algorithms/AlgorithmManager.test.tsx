@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 import { RepositoryProvider } from '../../app/RepositoryContext';
 import type { DashboardRepository } from '../../db/DashboardRepository';
 import type { Algorithm, Practice } from '../../domain/models';
@@ -24,12 +25,15 @@ function fakeRepository(initialAlgorithms: Algorithm[] = [], practices: Practice
       if (id === replacementId) throw new Error('替代算法不能相同');
       algorithms = algorithms.filter(item => item.id !== id);
     },
+    async deleteUnusedAlgorithm(id) { algorithms = algorithms.filter(item => item.id !== id); },
+    async deleteAlgorithmAndPractices(id) { algorithms = algorithms.filter(item => item.id !== id); },
     async listAlgorithms() { return [...algorithms]; },
     async listPractices() { return practices; },
     async recordPractice() { throw new Error('not implemented'); },
     async listProblems() { return []; },
     async deletePractice() {},
     async deleteProblem() {},
+    async getDataCounts() { return { problems: 0, practices: practices.length, algorithms: algorithms.length }; },
     async exportBackup() { return { schemaVersion: 1, exportedAt: new Date().toISOString(), problems: [], practices: [], algorithms: [] }; },
     async importBackup() { return { addedProblems: 0, addedPractices: 0, addedAlgorithms: 0, skippedIds: [] }; },
     async clearAll() {},
@@ -82,7 +86,8 @@ it('requires a distinct replacement and confirmation with the affected practice 
   expect(await screen.findByText('动态规划')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: '删除动态规划' }));
   const dialog = screen.getByRole('dialog', { name: '删除动态规划' });
-  expect(within(dialog).getByText('2 条练习将被更新')).toBeInTheDocument();
+  expect(within(dialog).getByText('此算法影响 2 条练习')).toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole('radio', { name: '替换算法并保留 2 条练习' }));
   const remove = within(dialog).getByRole('button', { name: '替换并删除' });
   expect(remove).toBeDisabled();
   await userEvent.selectOptions(within(dialog).getByLabelText('替代算法'), 'graph');
@@ -93,6 +98,52 @@ it('requires a distinct replacement and confirmation with the affected practice 
   expect(await screen.findByText('图论')).toBeInTheDocument();
   expect(screen.queryByText('动态规划')).not.toBeInTheDocument();
   expect((await repo.listAlgorithms()).map(item => item.id)).not.toContain('dp');
+});
+
+it('allows the last unused category to be explicitly confirmed and deleted', async () => {
+  const repo = fakeRepository([algorithm('dp', '动态规划')]);
+  renderManagerWithRepository(repo);
+  const trigger = await screen.findByRole('button', { name: '删除动态规划' });
+  expect(trigger).toBeEnabled();
+  await userEvent.click(trigger);
+  const dialog = screen.getByRole('dialog', { name: '删除动态规划' });
+  expect(within(dialog).getByText('此算法没有关联练习')).toBeInTheDocument();
+  const remove = within(dialog).getByRole('button', { name: '确认删除算法' });
+  expect(remove).toBeDisabled();
+  await userEvent.click(within(dialog).getByRole('checkbox', { name: '我确认删除动态规划' }));
+  await userEvent.click(remove);
+  expect(await screen.findByText('还没有算法分类，请先创建一个。')).toBeInTheDocument();
+});
+
+it('offers an explicitly confirmed cascade that names the exact affected practice count', async () => {
+  const practices = [
+    { id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' },
+  ];
+  const deleteAlgorithmAndPractices = vi.fn();
+  const repo = fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')], practices);
+  repo.deleteAlgorithmAndPractices = deleteAlgorithmAndPractices;
+  renderManagerWithRepository(repo);
+  await userEvent.click(await screen.findByRole('button', { name: '删除动态规划' }));
+  const dialog = screen.getByRole('dialog', { name: '删除动态规划' });
+  await userEvent.click(within(dialog).getByRole('radio', { name: '删除算法及 1 条关联练习' }));
+  const cascade = within(dialog).getByRole('button', { name: '删除算法及 1 条练习' });
+  expect(cascade).toBeDisabled();
+  await userEvent.click(within(dialog).getByRole('checkbox', { name: '我确认永久删除 1 条练习和动态规划' }));
+  await userEvent.click(cascade);
+  expect(deleteAlgorithmAndPractices).toHaveBeenCalledWith('dp', 1);
+});
+
+it('keeps deletion failures accessible inside the modal', async () => {
+  const practices = [{ id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' }];
+  const repo = fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')], practices);
+  repo.deleteAlgorithmAndPractices = vi.fn().mockRejectedValue(new Error('数据已变化，请重新确认'));
+  renderManagerWithRepository(repo);
+  await userEvent.click(await screen.findByRole('button', { name: '删除动态规划' }));
+  const dialog = screen.getByRole('dialog', { name: '删除动态规划' });
+  await userEvent.click(within(dialog).getByRole('radio', { name: '删除算法及 1 条关联练习' }));
+  await userEvent.click(within(dialog).getByRole('checkbox', { name: '我确认永久删除 1 条练习和动态规划' }));
+  await userEvent.click(within(dialog).getByRole('button', { name: '删除算法及 1 条练习' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('数据已变化，请重新确认');
 });
 
 it('closes the deletion dialog with Escape and restores focus', async () => {
@@ -106,17 +157,19 @@ it('closes the deletion dialog with Escape and restores focus', async () => {
 });
 
 it('focuses and contains keyboard navigation inside the deletion dialog', async () => {
-  const { container } = renderManagerWithRepository(fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')]));
+  const practices = [{ id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' }];
+  const { container } = renderManagerWithRepository(fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')], practices));
   await userEvent.click(await screen.findByRole('button', { name: '删除动态规划' }));
   const dialog = screen.getByRole('dialog', { name: '删除动态规划' });
   const replacement = within(dialog).getByLabelText('替代算法');
+  const firstMode = within(dialog).getByRole('radio', { name: '替换算法并保留 1 条练习' });
   const cancel = within(dialog).getByRole('button', { name: '取消' });
 
   await waitFor(() => expect(replacement).toHaveFocus());
   expect(container).toHaveAttribute('inert');
   cancel.focus();
   await userEvent.tab();
-  expect(replacement).toHaveFocus();
+  expect(firstMode).toHaveFocus();
   await userEvent.tab({ shift: true });
   expect(cancel).toHaveFocus();
 });

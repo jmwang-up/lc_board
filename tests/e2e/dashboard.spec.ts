@@ -96,3 +96,28 @@ test('keeps data after a reload', async ({ page }) => {
   await page.getByRole('link', { name: '题目记录', exact: true }).click();
   await expect(page.getByRole('heading', { name: '两数之和' })).toBeVisible();
 });
+
+test('opens exact-date history from the calendar and confirms practice and problem deletion', async ({ page }) => {
+  await page.goto('/');
+  await createAlgorithm(page, '哈希表');
+  await recordProblem(page, { url: 'https://leetcode.cn/problems/two-sum/', title: '两数之和', primary: '哈希表', date: '2026-07-12' });
+  await recordProblem(page, { url: 'https://leetcode.cn/problems/two-sum/', title: '两数之和', primary: '哈希表', date: '2026-07-12' });
+  await page.getByRole('link', { name: '算法看板' }).click();
+  await page.getByRole('link', { name: '2026-07-12：2 次练习' }).click();
+  await expect(page).toHaveURL(/\/problems\?from=2026-07-12&to=2026-07-12$/);
+  const row = page.getByRole('row').filter({ has: page.getByRole('heading', { name: '两数之和' }) });
+  await row.getByRole('button', { name: '查看练习记录' }).click();
+  const history = row.getByTestId('practice-history');
+  await history.getByRole('button', { name: '删除 2026-07-12 的练习' }).first().click();
+  let dialog = page.getByRole('dialog', { name: '删除练习' });
+  await dialog.getByRole('checkbox', { name: '我确认删除这条练习' }).check();
+  await dialog.getByRole('button', { name: '确认删除练习' }).click();
+  await expect(history.getByRole('listitem')).toHaveCount(1);
+
+  await row.getByRole('button', { name: '删除题目两数之和' }).click();
+  dialog = page.getByRole('dialog', { name: '删除题目两数之和' });
+  await expect(dialog.getByText('将同时永久删除 1 条练习')).toBeVisible();
+  await dialog.getByRole('checkbox', { name: '我确认删除两数之和及 1 条练习' }).check();
+  await dialog.getByRole('button', { name: '确认删除题目及 1 条练习' }).click();
+  await expect(page.getByRole('heading', { name: '没有匹配的题目' })).toBeVisible();
+});

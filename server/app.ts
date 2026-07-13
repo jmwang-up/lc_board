@@ -1,6 +1,6 @@
 import express from 'express';
-import type { ProblemMetadata } from '../src/domain/models';
-import { LeetCodeLookupError } from './leetcodeClient';
+import type { ProblemMetadata } from '../src/domain/models.js';
+import { LeetCodeLookupError } from './leetcodeClient.js';
 
 type Lookup = (slug: string, signal: AbortSignal) => Promise<ProblemMetadata>;
 

@@ -1,8 +1,9 @@
-import { createApp } from './app';
-import { lookupProblemMetadata } from './leetcodeClient';
+import { createApp } from './app.js';
+import { readServerConfig } from './config.js';
+import { lookupProblemMetadata } from './leetcodeClient.js';
 
-const port = Number(process.env.PORT ?? 8787);
+const { host, port } = readServerConfig(process.env);
 
-createApp({ lookup: lookupProblemMetadata }).listen(port, '127.0.0.1', () => {
-  console.log(`LeetCode metadata proxy listening on http://localhost:${port}`);
+createApp({ lookup: lookupProblemMetadata }).listen(port, host, () => {
+  console.log(`LeetCode metadata proxy listening on http://${host}:${port}`);
 });

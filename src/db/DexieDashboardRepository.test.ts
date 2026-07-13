@@ -73,7 +73,7 @@ describe('algorithm invariants', () => {
     await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: oldAlgorithm.id, secondaryAlgorithmIds: [replacement.id, other.id] });
     await repo.recordPractice({ metadata, practicedOn: '2026-07-13', primaryAlgorithmId: other.id, secondaryAlgorithmIds: [oldAlgorithm.id, replacement.id] });
 
-    await repo.replaceAndDeleteAlgorithm(oldAlgorithm.id, replacement.id);
+    await repo.replaceAndDeleteAlgorithm(oldAlgorithm.id, replacement.id, 2);
 
     expect((await repo.listAlgorithms()).map(({ id }) => id)).not.toContain(oldAlgorithm.id);
     const practices = await repo.listPractices();
@@ -81,6 +81,61 @@ describe('algorithm invariants', () => {
       .toMatchObject({ primaryAlgorithmId: replacement.id, secondaryAlgorithmIds: [other.id] });
     expect(practices.find(({ practicedOn }) => practicedOn === '2026-07-13'))
       .toMatchObject({ primaryAlgorithmId: other.id, secondaryAlgorithmIds: [replacement.id] });
+  });
+
+  it('rejects self-replacement without changing algorithms or practices', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '动态规划', color: '#111111' });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
+    const beforeAlgorithms = await repo.listAlgorithms();
+    const beforePractices = await repo.listPractices();
+
+    await expect(repo.replaceAndDeleteAlgorithm(algorithm.id, algorithm.id, 1))
+      .rejects.toThrow('替代算法不能与待删除算法相同');
+
+    expect(await repo.listAlgorithms()).toEqual(beforeAlgorithms);
+    expect(await repo.listPractices()).toEqual(beforePractices);
+  });
+
+  it('deletes an unused algorithm, including the last category', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '未使用', color: '#111111' });
+
+    await repo.deleteUnusedAlgorithm(algorithm.id, 0);
+
+    expect(await repo.listAlgorithms()).toEqual([]);
+  });
+
+  it('refuses unused deletion when practices reference the algorithm and leaves data unchanged', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '使用中', color: '#111111' });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
+
+    await expect(repo.deleteUnusedAlgorithm(algorithm.id, 0)).rejects.toThrow('数据已变化，请重新确认');
+
+    expect(await repo.listAlgorithms()).toHaveLength(1);
+    expect(await repo.listPractices()).toHaveLength(1);
+  });
+
+  it('deletes every affected practice and the algorithm in one cascade', async () => {
+    const doomed = await repo.createAlgorithm({ name: '待删除', color: '#111111' });
+    const retained = await repo.createAlgorithm({ name: '保留', color: '#222222' });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: doomed.id, secondaryAlgorithmIds: [] });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-13', primaryAlgorithmId: retained.id, secondaryAlgorithmIds: [doomed.id] });
+
+    await repo.deleteAlgorithmAndPractices(doomed.id, 2);
+
+    expect((await repo.listAlgorithms()).map(item => item.id)).toEqual([retained.id]);
+    expect(await repo.listPractices()).toEqual([]);
+    expect(await repo.listProblems()).toHaveLength(1);
+  });
+
+  it('rejects an algorithm deletion when the confirmed affected count is stale', async () => {
+    const doomed = await repo.createAlgorithm({ name: '待删除', color: '#111111' });
+    const replacement = await repo.createAlgorithm({ name: '替代', color: '#222222' });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: doomed.id, secondaryAlgorithmIds: [] });
+
+    await expect(repo.replaceAndDeleteAlgorithm(doomed.id, replacement.id, 0)).rejects.toThrow('数据已变化，请重新确认');
+
+    expect(await repo.listAlgorithms()).toHaveLength(2);
+    expect(await repo.listPractices()).toHaveLength(1);
   });
 });
 
@@ -91,11 +146,23 @@ describe('deletion invariants', () => {
     await database.algorithms.add({ id: 'algorithm', name: '双指针', color: '#2563eb', createdAt: timestamp });
     await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp });
 
-    await repo.clearAll();
+    await repo.clearAll({ problems: 1, practices: 1, algorithms: 1 });
 
     expect(await repo.listProblems()).toEqual([]);
     expect(await repo.listPractices()).toEqual([]);
     expect(await repo.listAlgorithms()).toEqual([]);
+  });
+
+  it('reads one transactional count snapshot and rejects stale clear confirmation', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '双指针', color: '#2563eb' });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
+    expect(await repo.getDataCounts()).toEqual({ problems: 1, practices: 1, algorithms: 1 });
+
+    await expect(repo.clearAll({ problems: 0, practices: 0, algorithms: 0 })).rejects.toThrow('数据已变化，请重新确认');
+
+    expect(await repo.listProblems()).toHaveLength(1);
+    expect(await repo.listPractices()).toHaveLength(1);
+    expect(await repo.listAlgorithms()).toHaveLength(1);
   });
 
   it('rolls back every clear when one table clear fails', async () => {
@@ -105,7 +172,7 @@ describe('deletion invariants', () => {
     await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp });
     vi.spyOn(database.algorithms, 'clear').mockRejectedValueOnce(new Error('clear failed'));
 
-    await expect(repo.clearAll()).rejects.toThrow('clear failed');
+    await expect(repo.clearAll({ problems: 1, practices: 1, algorithms: 1 })).rejects.toThrow('clear failed');
 
     expect(await repo.listProblems()).toHaveLength(1);
     expect(await repo.listPractices()).toHaveLength(1);
@@ -126,10 +193,20 @@ describe('deletion invariants', () => {
     const { problem } = await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
     await repo.recordPractice({ metadata, practicedOn: '2026-07-13', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
 
-    await repo.deleteProblem(problem.id);
+    await repo.deleteProblem(problem.id, 2);
 
     expect(await repo.listProblems()).toEqual([]);
     expect(await repo.listPractices()).toEqual([]);
+  });
+
+  it('rejects problem cascade when the confirmed practice count is stale', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '双指针', color: '#2563eb' });
+    const { problem } = await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
+
+    await expect(repo.deleteProblem(problem.id, 0)).rejects.toThrow('数据已变化，请重新确认');
+
+    expect(await repo.listProblems()).toHaveLength(1);
+    expect(await repo.listPractices()).toHaveLength(1);
   });
 });
 

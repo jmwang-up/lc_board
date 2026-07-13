@@ -17,7 +17,10 @@ export function AlgorithmManager() {
   const [deleting, setDeleting] = useState<Algorithm | null>(null);
   const [replacementId, setReplacementId] = useState('');
   const [affectedCount, setAffectedCount] = useState(0);
+  const [deleteMode, setDeleteMode] = useState<'replace' | 'cascade' | 'unused'>('unused');
   const [confirmed, setConfirmed] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deletePending, setDeletePending] = useState(false);
   const deleteTrigger = useRef<HTMLButtonElement | null>(null);
   const replacementSelect = useRef<HTMLSelectElement>(null);
 
@@ -64,21 +67,43 @@ export function AlgorithmManager() {
       setAffectedCount(practices.filter(practice => practice.primaryAlgorithmId === algorithm.id || practice.secondaryAlgorithmIds.includes(algorithm.id)).length);
       setDeleting(algorithm);
       setReplacementId('');
+      setDeleteMode(practices.some(practice => practice.primaryAlgorithmId === algorithm.id || practice.secondaryAlgorithmIds.includes(algorithm.id)) ? 'replace' : 'unused');
       setConfirmed(false);
+      setDeleteError('');
     } catch (cause) {
       setError(messageFor(cause, '读取练习数量失败'));
     }
   }
 
   async function replaceAndDelete() {
-    if (!deleting || !replacementId || replacementId === deleting.id || !confirmed) return;
+    if (!deleting || deleteMode !== 'replace' || !replacementId || replacementId === deleting.id || !confirmed) return;
     setError('');
     try {
-      await repository.replaceAndDeleteAlgorithm(deleting.id, replacementId);
+      setDeletePending(true);
+      await repository.replaceAndDeleteAlgorithm(deleting.id, replacementId, affectedCount);
       closeDelete();
       await reload();
     } catch (cause) {
-      setError(messageFor(cause, '删除算法失败'));
+      setDeleteError(messageFor(cause, '删除算法失败'));
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
+  async function deleteAlgorithm() {
+    if (!deleting || !confirmed) return;
+    setError('');
+    try {
+      setDeletePending(true);
+      if (deleteMode === 'cascade') await repository.deleteAlgorithmAndPractices(deleting.id, affectedCount);
+      else if (deleteMode === 'unused') await repository.deleteUnusedAlgorithm(deleting.id, affectedCount);
+      else return;
+      closeDelete();
+      await reload();
+    } catch (cause) {
+      setDeleteError(messageFor(cause, '删除算法失败'));
+    } finally {
+      setDeletePending(false);
     }
   }
 
@@ -100,22 +125,39 @@ export function AlgorithmManager() {
           <button disabled={!renameName.trim()} aria-label={`保存${renameName}`}>保存</button>
           <button type="button" onClick={() => setRenaming(null)}>取消</button>
         </form> : <>
-          <span style={{ color: algorithm.color }}>{algorithm.name}</span>
+          <span className="algorithm-name"><span className="algorithm-swatch" aria-hidden="true" style={{ backgroundColor: algorithm.color }} />{algorithm.name}</span>
           <button type="button" aria-label={`重命名${algorithm.name}`} onClick={() => beginRename(algorithm)}>重命名</button>
-          <button type="button" aria-label={`删除${algorithm.name}`} disabled={algorithms.length < 2} onClick={() => void beginDelete(algorithm)}>删除</button>
+          <button type="button" aria-label={`删除${algorithm.name}`} onClick={() => void beginDelete(algorithm)}>删除</button>
         </>}
       </li>)}</ul>
     </section>
     {deleting && <Modal ariaLabelledBy="delete-heading" initialFocusRef={replacementSelect} onClose={closeDelete} returnFocusRef={deleteTrigger}>
       <h2 id="delete-heading">删除{deleting.name}</h2>
-      <p>{affectedCount} 条练习将被更新</p>
-      <label>替代算法<select ref={replacementSelect} value={replacementId} onChange={event => setReplacementId(event.target.value)}>
-        <option value="">请选择</option>
-        {algorithms.filter(item => item.id !== deleting.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select></label>
-      <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />我确认更新 {affectedCount} 条练习并删除{deleting.name}</label>
-      <button type="button" disabled={!replacementId || replacementId === deleting.id || !confirmed} onClick={() => void replaceAndDelete()}>替换并删除</button>
-      <button type="button" onClick={closeDelete}>取消</button>
+      {affectedCount === 0 ? <>
+        <p>此算法没有关联练习</p>
+        <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />我确认删除{deleting.name}</label>
+        <button type="button" disabled={!confirmed} onClick={() => void deleteAlgorithm()}>确认删除算法</button>
+      </> : <>
+        <p>此算法影响 {affectedCount} 条练习</p>
+        <fieldset>
+          <legend>选择删除方式</legend>
+          <label><input disabled={deletePending} type="radio" name="delete-mode" checked={deleteMode === 'replace'} onChange={() => { setDeleteMode('replace'); setConfirmed(false); setDeleteError(''); }} />替换算法并保留 {affectedCount} 条练习</label>
+          <label><input disabled={deletePending} type="radio" name="delete-mode" checked={deleteMode === 'cascade'} onChange={() => { setDeleteMode('cascade'); setConfirmed(false); setDeleteError(''); }} />删除算法及 {affectedCount} 条关联练习</label>
+        </fieldset>
+        {deleteMode === 'replace' ? <>
+          <label>替代算法<select disabled={deletePending} ref={replacementSelect} value={replacementId} onChange={event => setReplacementId(event.target.value)}>
+            <option value="">请选择</option>
+            {algorithms.filter(item => item.id !== deleting.id).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select></label>
+          <label><input disabled={deletePending} type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />我确认更新 {affectedCount} 条练习并删除{deleting.name}</label>
+          <button type="button" disabled={deletePending || !replacementId || replacementId === deleting.id || !confirmed} onClick={() => void replaceAndDelete()}>替换并删除</button>
+        </> : <>
+          <label><input disabled={deletePending} type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />我确认永久删除 {affectedCount} 条练习和{deleting.name}</label>
+          <button type="button" disabled={deletePending || !confirmed} onClick={() => void deleteAlgorithm()}>删除算法及 {affectedCount} 条练习</button>
+        </>}
+      </>}
+      {deleteError && <p role="alert">{deleteError}</p>}
+      <button type="button" disabled={deletePending} onClick={closeDelete}>取消</button>
     </Modal>}
   </main>;
 }

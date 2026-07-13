@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { RepositoryProvider } from '../../app/RepositoryContext';
@@ -11,8 +11,10 @@ const emptyBackup: BackupV1 = { schemaVersion: 1, exportedAt: '2026-07-12T00:00:
 function repository(overrides: Partial<DashboardRepository> = {}): DashboardRepository {
   return {
     async createAlgorithm() { throw new Error('not implemented'); }, async renameAlgorithm() {}, async replaceAndDeleteAlgorithm() {},
+    async deleteUnusedAlgorithm() {}, async deleteAlgorithmAndPractices() {},
     async recordPractice() { throw new Error('not implemented'); }, async listAlgorithms() { return []; }, async listProblems() { return []; },
     async listPractices() { return []; }, async deletePractice() {}, async deleteProblem() {}, async clearAll() {},
+    async getDataCounts() { return { problems: 0, practices: 0, algorithms: 0 }; },
     async exportBackup() { return emptyBackup; }, async importBackup() { return { addedProblems: 0, addedPractices: 0, addedAlgorithms: 0, skippedIds: [] }; },
     ...overrides,
   };
@@ -60,16 +62,38 @@ it('shows a successful merge summary', async () => {
   expect(await screen.findByRole('status')).toHaveTextContent('新增 2 道题目、3 条练习、1 个算法');
 });
 
-it('requires the exact clear-all confirmation text', async () => {
+it('shows current entity counts in a two-stage modal and requires the exact clear-all phrase', async () => {
   const clearAll = vi.fn();
-  renderPage(repository({ clearAll }));
-  const clear = screen.getByRole('button', { name: '清空全部数据' });
+  renderPage(repository({
+    clearAll,
+    async getDataCounts() { return { problems: 1, practices: 1, algorithms: 1 }; },
+    async listAlgorithms() { return [{ id: 'a', name: '算法', color: '#000000', createdAt: '' }]; },
+  }));
+  await userEvent.click(screen.getByRole('button', { name: '开始清空全部数据' }));
+  const review = screen.getByRole('dialog', { name: '确认清空全部数据' });
+  expect(within(review).getByText('1 道题目、1 条练习、1 个算法')).toBeInTheDocument();
+  expect(within(review).queryByLabelText('确认文字')).not.toBeInTheDocument();
+  await userEvent.click(within(review).getByRole('button', { name: '继续' }));
+  const clear = within(review).getByRole('button', { name: '清空全部数据' });
   expect(clear).toBeDisabled();
-  await userEvent.type(screen.getByLabelText('确认文字'), '清空全部数据 ');
+  await userEvent.type(within(review).getByLabelText('确认文字'), '清空全部数据 ');
   expect(clear).toBeDisabled();
-  await userEvent.clear(screen.getByLabelText('确认文字'));
-  await userEvent.type(screen.getByLabelText('确认文字'), '清空全部数据');
+  await userEvent.clear(within(review).getByLabelText('确认文字'));
+  await userEvent.type(within(review).getByLabelText('确认文字'), '清空全部数据');
   expect(clear).toBeEnabled();
   await userEvent.click(clear);
   await waitFor(() => expect(clearAll).toHaveBeenCalledOnce());
+});
+
+it('keeps clear failures accessible inside the modal', async () => {
+  renderPage(repository({
+    async getDataCounts() { return { problems: 1, practices: 1, algorithms: 1 }; },
+    async clearAll() { throw new Error('数据已变化，请重新确认'); },
+  }));
+  await userEvent.click(screen.getByRole('button', { name: '开始清空全部数据' }));
+  const dialog = screen.getByRole('dialog', { name: '确认清空全部数据' });
+  await userEvent.click(within(dialog).getByRole('button', { name: '继续' }));
+  await userEvent.type(within(dialog).getByLabelText('确认文字'), '清空全部数据');
+  await userEvent.click(within(dialog).getByRole('button', { name: '清空全部数据' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('数据已变化，请重新确认');
 });

@@ -113,7 +113,10 @@ input:not([type="checkbox"]):not([type="color"]), select { padding: .65rem; bord
 }
 
 .activity-calendar { display: flex; flex-wrap: wrap; gap: .35rem; }
-.activity-calendar span { width: 1.1rem; height: 1.1rem; background: color-mix(in srgb, #5b48e8 calc(var(--activity) * 20%), #e7e9f2); border-radius: .2rem; }
+.activity-calendar span, .activity-calendar a { display: block; width: 1.5rem; height: 1.5rem; border-radius: .2rem; }
+.activity-calendar a { background: color-mix(in srgb, #5b48e8 calc(var(--activity) * 20%), #e7e9f2); }
+.algorithm-name { display: inline-flex; align-items: center; gap: .45rem; color: #172033; }
+.algorithm-swatch { width: 1rem; height: 1rem; border: 1px solid #697386; border-radius: .2rem; }
 .recent-list, .practice-history { display: grid; gap: .6rem; }
 .recent-list li, .practice-history li { display: flex; flex-wrap: wrap; gap: 1rem; }
 .problem-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }

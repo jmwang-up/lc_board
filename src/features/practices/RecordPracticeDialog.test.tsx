@@ -9,11 +9,12 @@ import { practiceFormSchema } from './PracticeForm';
 
 function repository(algorithm = true): DashboardRepository {
   return {
-    createAlgorithm: vi.fn(), renameAlgorithm: vi.fn(), replaceAndDeleteAlgorithm: vi.fn(),
+    createAlgorithm: vi.fn(), renameAlgorithm: vi.fn(), replaceAndDeleteAlgorithm: vi.fn(), deleteUnusedAlgorithm: vi.fn(), deleteAlgorithmAndPractices: vi.fn(),
     recordPractice: vi.fn().mockResolvedValue({ problem: {}, practice: {} }),
     listAlgorithms: vi.fn().mockResolvedValue(algorithm ? [{ id: 'alg-1', name: '哈希表', color: '#fff', createdAt: '' }] : []),
     listProblems: vi.fn().mockResolvedValue([]), listPractices: vi.fn().mockResolvedValue([]),
     deletePractice: vi.fn(), deleteProblem: vi.fn(), clearAll: vi.fn(),
+    getDataCounts: vi.fn().mockResolvedValue({ problems: 0, practices: 0, algorithms: 0 }),
     exportBackup: vi.fn(), importBackup: vi.fn(),
   } as DashboardRepository;
 }

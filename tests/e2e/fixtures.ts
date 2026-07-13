@@ -29,8 +29,11 @@ export async function exportBackup(page: Page): Promise<Download> {
 }
 
 export async function clearAllData(page: Page, confirmation: string) {
-  await page.getByLabel('确认文字').fill(confirmation);
-  await page.getByRole('button', { name: confirmation }).click();
+  await page.getByRole('button', { name: '开始清空全部数据' }).click();
+  const dialog = page.getByRole('dialog', { name: '确认清空全部数据' });
+  await dialog.getByRole('button', { name: '继续' }).click();
+  await dialog.getByLabel('确认文字').fill(confirmation);
+  await dialog.getByRole('button', { name: confirmation }).click();
   await expect(page.getByRole('status')).toHaveText('全部本地数据已清空');
 }
 

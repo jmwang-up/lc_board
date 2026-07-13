@@ -1,7 +1,7 @@
 import type { Algorithm, Practice, Problem } from '../domain/models';
 import { mergeBackup, parseBackup, type BackupV1, type MergeResult } from '../domain/backup';
 import { DashboardDatabase } from './DashboardDatabase';
-import type { DashboardRepository, RecordPracticeInput } from './DashboardRepository';
+import type { DashboardRepository, DataCounts, RecordPracticeInput } from './DashboardRepository';
 
 const normalizedName = (name: string) => name.trim().toLocaleLowerCase();
 
@@ -40,7 +40,7 @@ export class DexieDashboardRepository implements DashboardRepository {
     });
   }
 
-  async replaceAndDeleteAlgorithm(id: string, replacementId: string): Promise<void> {
+  async replaceAndDeleteAlgorithm(id: string, replacementId: string, expectedAffectedCount: number): Promise<void> {
     if (id === replacementId) throw new Error('替代算法不能与待删除算法相同');
     await this.database.transaction('rw', this.database.algorithms, this.database.practices, async () => {
       const [oldAlgorithm, replacement] = await Promise.all([
@@ -52,12 +52,36 @@ export class DexieDashboardRepository implements DashboardRepository {
       const practices = await this.database.practices
         .filter(practice => practice.primaryAlgorithmId === id || practice.secondaryAlgorithmIds.includes(id))
         .toArray();
+      if (practices.length !== expectedAffectedCount) throw new Error('数据已变化，请重新确认');
       for (const practice of practices) {
         const primaryAlgorithmId = practice.primaryAlgorithmId === id ? replacementId : practice.primaryAlgorithmId;
         const secondaryAlgorithmIds = [...new Set(practice.secondaryAlgorithmIds.map(item => item === id ? replacementId : item))]
           .filter(item => item !== primaryAlgorithmId);
         await this.database.practices.update(practice.id, { primaryAlgorithmId, secondaryAlgorithmIds, updatedAt: new Date().toISOString() });
       }
+      await this.database.algorithms.delete(id);
+    });
+  }
+
+  async deleteUnusedAlgorithm(id: string, expectedAffectedCount: number): Promise<void> {
+    await this.database.transaction('rw', this.database.algorithms, this.database.practices, async () => {
+      if (!await this.database.algorithms.get(id)) throw new Error('算法不存在');
+      const affectedCount = await this.database.practices
+        .filter(practice => practice.primaryAlgorithmId === id || practice.secondaryAlgorithmIds.includes(id))
+        .count();
+      if (affectedCount !== expectedAffectedCount || affectedCount !== 0) throw new Error('数据已变化，请重新确认');
+      await this.database.algorithms.delete(id);
+    });
+  }
+
+  async deleteAlgorithmAndPractices(id: string, expectedAffectedCount: number): Promise<void> {
+    await this.database.transaction('rw', this.database.algorithms, this.database.practices, async () => {
+      if (!await this.database.algorithms.get(id)) throw new Error('算法不存在');
+      const affected = await this.database.practices
+        .filter(practice => practice.primaryAlgorithmId === id || practice.secondaryAlgorithmIds.includes(id))
+        .primaryKeys();
+      if (affected.length !== expectedAffectedCount) throw new Error('数据已变化，请重新确认');
+      await this.database.practices.bulkDelete(affected);
       await this.database.algorithms.delete(id);
     });
   }
@@ -105,15 +129,33 @@ export class DexieDashboardRepository implements DashboardRepository {
   listPractices(): Promise<Practice[]> { return this.database.practices.toArray(); }
   deletePractice(id: string): Promise<void> { return this.database.practices.delete(id); }
 
-  async deleteProblem(id: string): Promise<void> {
+  async deleteProblem(id: string, expectedPracticeCount: number): Promise<void> {
     await this.database.transaction('rw', this.database.problems, this.database.practices, async () => {
+      const actualPracticeCount = await this.database.practices.where('problemId').equals(id).count();
+      if (actualPracticeCount !== expectedPracticeCount) throw new Error('数据已变化，请重新确认');
       await this.database.practices.where('problemId').equals(id).delete();
       await this.database.problems.delete(id);
     });
   }
 
-  async clearAll(): Promise<void> {
+  getDataCounts(): Promise<DataCounts> {
+    return this.database.transaction('r', this.database.problems, this.database.practices, this.database.algorithms, async () => ({
+      problems: await this.database.problems.count(),
+      practices: await this.database.practices.count(),
+      algorithms: await this.database.algorithms.count(),
+    }));
+  }
+
+  async clearAll(expectedCounts: DataCounts): Promise<void> {
     await this.database.transaction('rw', this.database.problems, this.database.practices, this.database.algorithms, async () => {
+      const actualCounts = {
+        problems: await this.database.problems.count(),
+        practices: await this.database.practices.count(),
+        algorithms: await this.database.algorithms.count(),
+      };
+      if (actualCounts.problems !== expectedCounts.problems || actualCounts.practices !== expectedCounts.practices || actualCounts.algorithms !== expectedCounts.algorithms) {
+        throw new Error('数据已变化，请重新确认');
+      }
       await this.database.practices.clear();
       await this.database.problems.clear();
       await this.database.algorithms.clear();

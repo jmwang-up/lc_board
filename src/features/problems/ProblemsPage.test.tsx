@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { vi } from 'vitest';
 import type { DashboardRepository } from '../../db/DashboardRepository';
 import { RepositoryProvider } from '../../app/RepositoryContext';
 import { DashboardPage } from '../dashboard/DashboardPage';
@@ -36,6 +37,15 @@ it('navigates from a dashboard algorithm card to its primary filter', async () =
   expect(screen.getByTestId('location')).toHaveTextContent('/problems?primaryAlgorithmId=dp');
 });
 
+it('navigates from an active calendar date to an exact URL-backed date filter', async () => {
+  render(<RepositoryProvider repository={repository}><MemoryRouter><Routes>
+    <Route path="/" element={<DashboardPage />} />
+    <Route path="/problems" element={<Location />} />
+  </Routes></MemoryRouter></RepositoryProvider>);
+  await userEvent.click(await screen.findByRole('link', { name: '2026-07-12：2 次练习' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('/problems?from=2026-07-12&to=2026-07-12');
+});
+
 it('reads combined filters from the URL and expands newest-first labeled history', async () => {
   render(<RepositoryProvider repository={repository}><MemoryRouter initialEntries={['/problems?query=21&difficulty=medium&primaryAlgorithmId=dp&from=2026-07-11&to=2026-07-12']}>
     <ProblemsPage />
@@ -58,6 +68,65 @@ it('shows only the requested problem on the detail route', async () => {
   expect(await screen.findByRole('heading', { name: '寻找峰值' })).toBeInTheDocument();
   expect(screen.queryByText('两数之和')).not.toBeInTheDocument();
   expect(screen.getByRole('list', { name: '寻找峰值的练习记录' })).toBeInTheDocument();
+});
+
+it('confirms individual practice deletion and reloads history after success', async () => {
+  let currentPractices = [...practices];
+  const deletePractice = vi.fn(async (id: string) => { currentPractices = currentPractices.filter(item => item.id !== id); });
+  const repo = { ...repository, listPractices: vi.fn(async () => currentPractices), deletePractice } as DashboardRepository;
+  render(<RepositoryProvider repository={repo}><MemoryRouter initialEntries={['/problems/p2']}>
+    <Routes><Route path="/problems/:problemId" element={<ProblemsPage />} /></Routes>
+  </MemoryRouter></RepositoryProvider>);
+  const history = await screen.findByRole('list', { name: '寻找峰值的练习记录' });
+  await userEvent.click(within(history).getByRole('button', { name: '删除 2026-07-12 的练习' }));
+  const dialog = screen.getByRole('dialog', { name: '删除练习' });
+  expect(within(dialog).getByText(/2026-07-12/)).toBeInTheDocument();
+  const remove = within(dialog).getByRole('button', { name: '确认删除练习' });
+  expect(remove).toBeDisabled();
+  await userEvent.click(within(dialog).getByRole('checkbox', { name: '我确认删除这条练习' }));
+  await userEvent.click(remove);
+  expect(deletePractice).toHaveBeenCalledWith('new');
+  expect(await screen.findByRole('list', { name: '寻找峰值的练习记录' })).not.toHaveTextContent('2026-07-12');
+  expect(repo.listPractices).toHaveBeenCalledTimes(2);
+});
+
+it('confirms problem cascade with the exact affected practice count and reloads after success', async () => {
+  let currentProblems = [...problems];
+  let currentPractices = [...practices];
+  const deleteProblem = vi.fn(async (id: string) => {
+    currentProblems = currentProblems.filter(item => item.id !== id);
+    currentPractices = currentPractices.filter(item => item.problemId !== id);
+  });
+  const repo = {
+    ...repository,
+    listProblems: vi.fn(async () => currentProblems),
+    listPractices: vi.fn(async () => currentPractices),
+    deleteProblem,
+  } as DashboardRepository;
+  render(<RepositoryProvider repository={repo}><MemoryRouter initialEntries={['/problems']}><ProblemsPage /></MemoryRouter></RepositoryProvider>);
+  const row = (await screen.findByRole('heading', { name: '寻找峰值' })).closest('tr')!;
+  await userEvent.click(within(row).getByRole('button', { name: '删除题目寻找峰值' }));
+  const dialog = screen.getByRole('dialog', { name: '删除题目寻找峰值' });
+  expect(within(dialog).getByText('将同时永久删除 2 条练习')).toBeInTheDocument();
+  const remove = within(dialog).getByRole('button', { name: '确认删除题目及 2 条练习' });
+  expect(remove).toBeDisabled();
+  await userEvent.click(within(dialog).getByRole('checkbox', { name: '我确认删除寻找峰值及 2 条练习' }));
+  await userEvent.click(remove);
+  expect(deleteProblem).toHaveBeenCalledWith('p2', 2);
+  expect(await screen.findByRole('heading', { name: '两数之和' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: '寻找峰值' })).not.toBeInTheDocument();
+  expect(repo.listProblems).toHaveBeenCalledTimes(2);
+});
+
+it('keeps deletion failures accessible inside the confirmation modal', async () => {
+  const repo = { ...repository, deleteProblem: vi.fn().mockRejectedValue(new Error('数据已变化，请重新确认')) } as DashboardRepository;
+  render(<RepositoryProvider repository={repo}><MemoryRouter initialEntries={['/problems']}><ProblemsPage /></MemoryRouter></RepositoryProvider>);
+  const row = (await screen.findByRole('heading', { name: '寻找峰值' })).closest('tr')!;
+  await userEvent.click(within(row).getByRole('button', { name: '删除题目寻找峰值' }));
+  const dialog = screen.getByRole('dialog', { name: '删除题目寻找峰值' });
+  await userEvent.click(within(dialog).getByRole('checkbox', { name: '我确认删除寻找峰值及 2 条练习' }));
+  await userEvent.click(within(dialog).getByRole('button', { name: '确认删除题目及 2 条练习' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('数据已变化，请重新确认');
 });
 
 it.each([

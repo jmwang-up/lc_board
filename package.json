@@ -2,11 +2,18 @@
   "name": "lc-board",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "vite",
     "dev:api": "tsx watch server/index.ts",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "tsc -b && vite build",
+    "build:api": "tsc -p tsconfig.server.json",
+    "start": "npm run start:api",
+    "start:api": "node dist-api/server/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
