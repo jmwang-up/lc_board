@@ -35,7 +35,7 @@ function fakeRepository(initialAlgorithms: Algorithm[] = [], practices: Practice
     async deletePractice() {},
     async deleteProblem() {},
     async getDataCounts() { return { problems: 0, practices: practices.length, algorithms: algorithms.length }; },
-    async exportBackup() { return { schemaVersion: 1, exportedAt: new Date().toISOString(), problems: [], practices: [], algorithms: [] }; },
+    async exportBackup() { return { schemaVersion: 2, exportedAt: new Date().toISOString(), problems: [], practices: [], algorithms: [] }; },
     async importBackup() { return { addedProblems: 0, addedPractices: 0, addedAlgorithms: 0, skippedIds: [] }; },
     async clearAll() {},
   };

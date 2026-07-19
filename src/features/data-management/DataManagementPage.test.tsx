@@ -3,10 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { RepositoryProvider } from '../../app/RepositoryContext';
 import type { DashboardRepository } from '../../db/DashboardRepository';
-import type { BackupV1 } from '../../domain/backup';
+import type { BackupV2 } from '../../domain/backup';
 import { DataManagementPage } from './DataManagementPage';
 
-const emptyBackup: BackupV1 = { schemaVersion: 1, exportedAt: '2026-07-12T00:00:00.000Z', problems: [], practices: [], algorithms: [] };
+const emptyBackup: BackupV2 = { schemaVersion: 2, exportedAt: '2026-07-12T00:00:00.000Z', problems: [], practices: [], algorithms: [] };
 
 function repository(overrides: Partial<DashboardRepository> = {}): DashboardRepository {
   return {

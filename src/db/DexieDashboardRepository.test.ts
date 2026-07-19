@@ -280,14 +280,38 @@ describe('deletion invariants', () => {
 });
 
 describe('backup invariants', () => {
-  it('exports a schema-versioned consistent snapshot', async () => {
+  it('exports a version-2 snapshot with the exact solution text', async () => {
     const algorithm = await repo.createAlgorithm({ name: '哈希表', color: '#16a34a' });
-    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [], solutionMarkdown: '## 哈希表解法' });
 
     const result = await repo.exportBackup();
 
-    expect(result).toMatchObject({ schemaVersion: 1, problems: [expect.any(Object)], practices: [expect.any(Object)], algorithms: [expect.any(Object)] });
+    expect(result).toMatchObject({ schemaVersion: 2, problems: [expect.any(Object)], practices: [{ solutionMarkdown: '## 哈希表解法' }], algorithms: [expect.any(Object)] });
     expect(() => new Date(result.exportedAt).toISOString()).not.toThrow();
+  });
+
+  it('imports a version-1 practice with empty solution text', async () => {
+    const timestamp = '2026-07-13T00:00:00.000Z';
+
+    await repo.importBackup({
+      schemaVersion: 1, exportedAt: timestamp,
+      problems: [{ id: 'legacy-problem', leetcodeSlug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: 'https://leetcode.cn/problems/two-sum/', createdAt: timestamp }],
+      algorithms: [{ id: 'legacy-algorithm', name: '哈希表', color: '#16a34a', createdAt: timestamp }],
+      practices: [{ id: 'legacy-practice', problemId: 'legacy-problem', practicedOn: '2026-07-13', primaryAlgorithmId: 'legacy-algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp }],
+    });
+
+    expect(await repo.listPractices()).toMatchObject([{ id: 'legacy-practice', solutionMarkdown: '' }]);
+  });
+
+  it('restores solutions after version-2 export, clear, and import', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '哈希表', color: '#16a34a' });
+    await repo.recordPractice({ metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [], solutionMarkdown: '保留这段解题思路' });
+    const backup = await repo.exportBackup();
+
+    await repo.clearAll(await repo.getDataCounts());
+    await repo.importBackup(backup);
+
+    expect(await repo.listPractices()).toMatchObject([{ solutionMarkdown: '保留这段解题思路' }]);
   });
 
   it('imports remapped additions and returns a summary', async () => {
@@ -296,7 +320,7 @@ describe('backup invariants', () => {
     const timestamp = '2026-07-13T00:00:00.000Z';
 
     const summary = await repo.importBackup({
-      schemaVersion: 1, exportedAt: timestamp,
+      schemaVersion: 2, exportedAt: timestamp,
       problems: [{ ...problem, id: 'import-problem' }],
       algorithms: [{ ...algorithm, id: 'import-algorithm' }],
       practices: [{ id: 'import-practice', problemId: 'import-problem', practicedOn: '2026-07-13', primaryAlgorithmId: 'import-algorithm', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: timestamp, updatedAt: timestamp }],

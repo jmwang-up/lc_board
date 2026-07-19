@@ -1,14 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import type { Algorithm, Practice, Problem } from './models';
-import { mergeBackup, parseBackup, type BackupV1 } from './backup';
+import { mergeBackup, parseBackup, type BackupV2 } from './backup';
 
 const timestamp = '2026-07-12T00:00:00.000Z';
 const problem: Problem = { id: 'problem-local', leetcodeSlug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: 'https://leetcode.cn/problems/two-sum/', createdAt: timestamp };
 const algorithm: Algorithm = { id: 'algorithm-local', name: '哈希表', color: '#16a34a', createdAt: timestamp };
 const practice: Practice = { id: 'practice-imported', problemId: problem.id, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: timestamp, updatedAt: timestamp };
-const backup = (values: Partial<BackupV1> = {}): BackupV1 => ({ schemaVersion: 1, exportedAt: timestamp, problems: [], algorithms: [], practices: [], ...values });
+const backup = (values: Partial<BackupV2> = {}): BackupV2 => ({ schemaVersion: 2, exportedAt: timestamp, problems: [], algorithms: [], practices: [], ...values });
 
 describe('parseBackup', () => {
+  it('normalizes a version-1 backup solution to empty text', () => {
+    const legacyPractice = { ...practice } as Record<string, unknown>;
+    delete legacyPractice.solutionMarkdown;
+
+    const parsed = parseBackup({
+      schemaVersion: 1, exportedAt: timestamp,
+      problems: [problem], algorithms: [algorithm], practices: [legacyPractice],
+    });
+
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.practices[0].solutionMarkdown).toBe('');
+  });
+
+  it('accepts 20,000 characters and atomically rejects 20,001', () => {
+    expect(parseBackup(backup({
+      problems: [problem], algorithms: [algorithm],
+      practices: [{ ...practice, solutionMarkdown: 'x'.repeat(20_000) }],
+    }))).toMatchObject({ schemaVersion: 2 });
+    expect(() => parseBackup(backup({
+      problems: [problem], algorithms: [algorithm],
+      practices: [{ ...practice, solutionMarkdown: 'x'.repeat(20_001) }],
+    }))).toThrow('备份数据格式无效');
+  });
+
   it('rejects solution Markdown longer than 20,000 characters', () => {
     expect(() => parseBackup(backup({
       problems: [problem], algorithms: [algorithm],
@@ -34,7 +58,7 @@ describe('parseBackup', () => {
   });
 
   it.each([
-    [{ schemaVersion: 2 }, '备份版本不受支持'],
+    [{ schemaVersion: 3 }, '备份版本不受支持'],
     [{ problems: [problem, { ...problem }] }, '题目 ID 重复'],
     [{ problems: [problem, { ...problem, id: 'other' }] }, '题目别名重复'],
     [{ algorithms: [algorithm, { ...algorithm, id: 'other', name: ' 哈希表 ' }] }, '算法名称重复'],

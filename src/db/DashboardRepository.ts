@@ -1,5 +1,5 @@
 import type { Algorithm, Practice, Problem, ProblemMetadata } from '../domain/models';
-import type { BackupV1, MergeResult } from '../domain/backup';
+import type { BackupV2, MergeResult } from '../domain/backup';
 
 export interface RecordPracticeInput {
   metadata: ProblemMetadata;
@@ -25,7 +25,7 @@ export interface DashboardRepository {
   deletePractice(id: string): Promise<void>;
   deleteProblem(id: string, expectedPracticeCount: number): Promise<void>;
   getDataCounts(): Promise<DataCounts>;
-  exportBackup(): Promise<BackupV1>;
-  importBackup(backup: BackupV1): Promise<MergeResult['summary']>;
+  exportBackup(): Promise<BackupV2>;
+  importBackup(backup: unknown): Promise<MergeResult['summary']>;
   clearAll(expectedCounts: DataCounts): Promise<void>;
 }

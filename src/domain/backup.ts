@@ -18,17 +18,25 @@ export const problemSchema = z.object({
   }
 });
 export const algorithmSchema = z.object({ id, name: z.string().trim().min(1), color: z.string().min(1), createdAt: isoDateTime }).strict();
-export const practiceSchema = z.object({
+const practiceBaseSchema = z.object({
   id, problemId: id, practicedOn: localDate, primaryAlgorithmId: id,
-  secondaryAlgorithmIds: z.array(id), solutionMarkdown: z.string().max(SOLUTION_MARKDOWN_MAX_LENGTH).default(''), createdAt: isoDateTime, updatedAt: isoDateTime,
+  secondaryAlgorithmIds: z.array(id), createdAt: isoDateTime, updatedAt: isoDateTime,
+});
+const legacyPracticeSchema = practiceBaseSchema.strict();
+const practiceV2Schema = practiceBaseSchema.extend({
+  solutionMarkdown: z.string().max(SOLUTION_MARKDOWN_MAX_LENGTH),
 }).strict();
 
 export const backupV1Schema = z.object({
   schemaVersion: z.literal(1), exportedAt: isoDateTime,
-  problems: z.array(problemSchema), practices: z.array(practiceSchema), algorithms: z.array(algorithmSchema),
+  problems: z.array(problemSchema), practices: z.array(legacyPracticeSchema), algorithms: z.array(algorithmSchema),
 }).strict();
-export type BackupV1 = z.infer<typeof backupV1Schema>;
-export interface MergeResult extends BackupV1 {
+export const backupV2Schema = z.object({
+  schemaVersion: z.literal(2), exportedAt: isoDateTime,
+  problems: z.array(problemSchema), practices: z.array(practiceV2Schema), algorithms: z.array(algorithmSchema),
+}).strict();
+export type BackupV2 = z.infer<typeof backupV2Schema>;
+export interface MergeResult extends BackupV2 {
   summary: { addedProblems: number; addedPractices: number; addedAlgorithms: number; skippedIds: string[] };
 }
 
@@ -43,13 +51,15 @@ function assertUnique<T>(items: T[], key: (item: T) => string, message: string):
   }
 }
 
-export function parseBackup(input: unknown): BackupV1 {
-  if (typeof input === 'object' && input !== null && 'schemaVersion' in input && (input as { schemaVersion?: unknown }).schemaVersion !== 1) {
-    throw new Error('备份版本不受支持');
-  }
-  const result = backupV1Schema.safeParse(input);
+export function parseBackup(input: unknown): BackupV2 {
+  if (typeof input !== 'object' || input === null) throw new Error('备份数据格式无效');
+  const version = (input as { schemaVersion?: unknown }).schemaVersion;
+  const result = version === 1 ? backupV1Schema.safeParse(input) : version === 2 ? backupV2Schema.safeParse(input) : null;
+  if (result === null) throw new Error('备份版本不受支持');
   if (!result.success) throw new Error('备份数据格式无效');
-  const value = result.data;
+  const value: BackupV2 = result.data.schemaVersion === 1
+    ? { ...result.data, schemaVersion: 2, practices: result.data.practices.map(practice => ({ ...practice, solutionMarkdown: '' })) }
+    : result.data;
   assertUnique(value.problems, item => item.id, '题目 ID 重复');
   assertUnique(value.problems, item => normalize(item.leetcodeSlug), '题目别名重复');
   assertUnique(value.algorithms, item => item.id, '算法 ID 重复');
@@ -72,7 +82,7 @@ export function parseBackup(input: unknown): BackupV1 {
 function sameProblem(left: Problem, right: Problem): boolean { return normalize(left.leetcodeSlug) === normalize(right.leetcodeSlug); }
 function sameAlgorithm(left: Algorithm, right: Algorithm): boolean { return normalize(left.name) === normalize(right.name); }
 
-export function mergeBackup(localInput: BackupV1, importedInput: BackupV1): MergeResult {
+export function mergeBackup(localInput: BackupV2, importedInput: BackupV2): MergeResult {
   const local = parseBackup(localInput);
   const imported = parseBackup(importedInput);
   const problems = [...local.problems];
@@ -115,7 +125,7 @@ export function mergeBackup(localInput: BackupV1, importedInput: BackupV1): Merg
     addedPractices += 1;
   }
   return {
-    schemaVersion: 1, exportedAt: local.exportedAt, problems, algorithms, practices,
+    schemaVersion: 2, exportedAt: local.exportedAt, problems, algorithms, practices,
     summary: {
       addedProblems: problems.length - local.problems.length,
       addedPractices,

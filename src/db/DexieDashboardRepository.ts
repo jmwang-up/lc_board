@@ -1,5 +1,5 @@
 import { SOLUTION_MARKDOWN_MAX_LENGTH, type Algorithm, type Practice, type Problem } from '../domain/models';
-import { mergeBackup, parseBackup, type BackupV1, type MergeResult } from '../domain/backup';
+import { mergeBackup, parseBackup, type BackupV2, type MergeResult } from '../domain/backup';
 import { DashboardDatabase } from './DashboardDatabase';
 import type { DashboardRepository, DataCounts, RecordPracticeInput } from './DashboardRepository';
 
@@ -180,9 +180,9 @@ export class DexieDashboardRepository implements DashboardRepository {
     });
   }
 
-  async exportBackup(): Promise<BackupV1> {
+  async exportBackup(): Promise<BackupV2> {
     return this.database.transaction('r', this.database.problems, this.database.practices, this.database.algorithms, async () => ({
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       problems: await this.database.problems.toArray(),
       practices: await this.database.practices.toArray(),
@@ -190,7 +190,7 @@ export class DexieDashboardRepository implements DashboardRepository {
     }));
   }
 
-  async importBackup(input: BackupV1): Promise<MergeResult['summary']> {
+  async importBackup(input: unknown): Promise<MergeResult['summary']> {
     const imported = parseBackup(input);
     const local = await this.exportBackup();
     const merged = mergeBackup(local, imported);
