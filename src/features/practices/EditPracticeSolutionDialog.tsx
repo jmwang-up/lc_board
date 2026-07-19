@@ -26,6 +26,7 @@ export function EditPracticeSolutionDialog({ practice, open, onClose, onSaved }:
 
   if (!open || !practice) return null;
   const selectedPractice = practice;
+  const solutionTooLong = value.length > SOLUTION_MARKDOWN_MAX_LENGTH;
 
   async function save() {
     if (saving) return;
@@ -55,8 +56,8 @@ export function EditPracticeSolutionDialog({ practice, open, onClose, onSaved }:
   >
     <h2 id="edit-practice-solution-title">编辑解题思路</h2>
     <button ref={closeButton} type="button" disabled={saving} onClick={onClose}>关闭</button>
-    <MarkdownEditor value={value} onChange={setValue} disabled={saving} error={error} />
-    <button type="button" disabled={saving || value.length > SOLUTION_MARKDOWN_MAX_LENGTH} onClick={() => void save()}>
+    <MarkdownEditor value={value} onChange={setValue} disabled={saving} error={solutionTooLong ? '解题思路不能超过 20000 个字符' : error} />
+    <button type="button" disabled={saving || solutionTooLong} onClick={() => void save()}>
       {saving ? '保存中…' : '保存思路'}
     </button>
   </Modal>;

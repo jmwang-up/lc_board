@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -87,6 +87,28 @@ describe('EditPracticeSolutionDialog', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('保存失败，请重试');
     expect(screen.getByLabelText('解题思路')).toHaveValue('保留的修改');
+  });
+
+  it('shows the solution length error and prevents a write at 20,001 characters', () => {
+    const repo = repository();
+    renderDialog(repo);
+    fireEvent.change(screen.getByLabelText('解题思路'), { target: { value: 'x'.repeat(20_001) } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('解题思路不能超过 20000 个字符');
+    expect(screen.getByRole('button', { name: '保存思路' })).toBeDisabled();
+    expect(repo.updatePracticeSolution).not.toHaveBeenCalled();
+  });
+
+  it('saves exactly 20,000 solution characters', async () => {
+    const repo = repository();
+    const solutionMarkdown = 'x'.repeat(20_000);
+    renderDialog(repo);
+    fireEvent.change(screen.getByLabelText('解题思路'), { target: { value: solutionMarkdown } });
+
+    expect(screen.getByRole('button', { name: '保存思路' })).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '保存思路' }));
+    await waitFor(() => expect(repo.updatePracticeSolution).toHaveBeenCalledWith('practice-1', solutionMarkdown));
   });
 
   it('prevents a second submission while the solution is saving', async () => {

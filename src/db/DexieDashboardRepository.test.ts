@@ -67,6 +67,20 @@ describe('practice invariants', () => {
     await expect(repo.updatePracticeSolution('missing', 'x'.repeat(20_001))).rejects.toThrow('解题思路不能超过 20000 个字符');
   });
 
+  it('accepts exactly 20,000 characters when recording and updating a solution', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '哈希表', color: '#2563eb' });
+    const recordedSolution = 'x'.repeat(20_000);
+    const updatedSolution = 'y'.repeat(20_000);
+    const { practice } = await repo.recordPractice({
+      metadata, practicedOn: '2026-07-21', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [], solutionMarkdown: recordedSolution,
+    });
+
+    expect(practice.solutionMarkdown).toBe(recordedSolution);
+    await expect(repo.updatePracticeSolution(practice.id, updatedSolution)).resolves.toMatchObject({
+      id: practice.id, solutionMarkdown: updatedSolution,
+    });
+  });
+
   it('reuses a problem and creates a new practice every time', async () => {
     const algorithm = await repo.createAlgorithm({ name: '双指针', color: '#2563eb' });
     const input = { metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] };
