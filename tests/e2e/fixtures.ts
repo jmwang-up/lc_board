@@ -37,7 +37,7 @@ export async function clearAllData(page: Page, confirmation: string) {
   await expect(page.getByRole('status')).toHaveText('全部本地数据已清空');
 }
 
-export async function importBackup(page: Page, path: string) {
+export async function importBackup(page: Page, path: string, added = { problems: 2, practices: 3, algorithms: 2 }) {
   await page.getByLabel('选择备份文件').setInputFiles(path);
-  await expect(page.getByRole('status')).toHaveText('导入成功：新增 2 道题目、3 条练习、2 个算法');
+  await expect(page.getByRole('status')).toHaveText(`导入成功：新增 ${added.problems} 道题目、${added.practices} 条练习、${added.algorithms} 个算法`);
 }

@@ -2,6 +2,10 @@
 
 LC Board 是一个本地优先的 LeetCode 练习看板。算法分类、题目和练习记录保存在当前浏览器的 IndexedDB 中；Node API 只代理公开题目元数据，不保存练习数据。
 
+## 解题思路
+
+每条练习都可以选择性地保存一份解题思路。思路使用 Markdown，支持 GFM，但不支持原始 HTML；单条思路最长为 20,000 个字符。
+
 ## Runtime prerequisites
 
 - Node.js 22 or newer (the supported range is `>=22`).
@@ -49,6 +53,6 @@ HOST=0.0.0.0 PORT=8787 npm run start:api
 
 ## Backup and restore
 
-Personal data is stored in this browser's IndexedDB. Export a JSON backup before clearing browser site data. The Node API stores no practice data.
+Personal data is stored in this browser's IndexedDB. Export a JSON backup before clearing browser site data. The Node API stores no practice data. Deleting this browser site's data also deletes saved solutions unless a JSON backup exists.
 
-在“数据管理”中选择“导出数据”保存 JSON。恢复时选择该 JSON 文件；导入会校验格式并合并题目、练习和算法，不覆盖已有记录。导出后再清空数据，可用同一文件恢复实体及练习关系。
+在“数据管理”中选择“导出数据”保存 JSON。新导出文件使用版本 2，仍可导入版本 1 的备份；导入会校验格式并合并题目、练习和算法，不覆盖已有记录。导出后再清空数据，可用同一文件恢复实体、练习关系和解题思路。
