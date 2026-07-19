@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useRepository } from '../../app/RepositoryContext';
 import { filterProblems, type DashboardDataset, type ProblemFilters } from '../../domain/dashboard';
-import type { Difficulty } from '../../domain/models';
+import type { Difficulty, Practice } from '../../domain/models';
 import { EmptyState } from '../../shared/ui/EmptyState';
 import { Modal } from '../../shared/ui/Modal';
+import { EditPracticeSolutionDialog } from '../practices/EditPracticeSolutionDialog';
 import { ProblemDetails } from './ProblemDetails';
 
 const difficultyNames = { easy: '简单', medium: '中等', hard: '困难' };
@@ -20,10 +21,12 @@ export function ProblemsPage() {
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [actionError, setActionError] = useState('');
   const [deletePending, setDeletePending] = useState(false);
+  const [editingPractice, setEditingPractice] = useState<Practice>();
   const deleteTrigger = useRef<HTMLElement | null>(null);
   const confirmationRef = useRef<HTMLInputElement>(null);
   const [params, setParams] = useSearchParams();
   const { problemId } = useParams();
+  const reload = () => setLoadAttempt(value => value + 1);
   useEffect(() => {
     let active = true;
     setLoadState({ status: 'loading' });
@@ -37,7 +40,7 @@ export function ProblemsPage() {
     return () => { active = false; };
   }, [repository, loadAttempt]);
   if (loadState.status === 'loading') return <main><h1>题目记录</h1><p>正在加载…</p></main>;
-  if (loadState.status === 'error') return <main><h1>题目记录</h1><section role="alert" className="load-error"><h2>题目记录加载失败</h2><p>暂时无法读取本地数据，请重试。</p><button type="button" onClick={() => setLoadAttempt(value => value + 1)}>重新加载</button></section></main>;
+  if (loadState.status === 'error') return <main><h1>题目记录</h1><section role="alert" className="load-error"><h2>题目记录加载失败</h2><p>暂时无法读取本地数据，请重试。</p><button type="button" onClick={reload}>重新加载</button></section></main>;
   const { dataset } = loadState;
   const filters: ProblemFilters = {
     query: params.get('query') || undefined,
@@ -70,7 +73,7 @@ export function ProblemsPage() {
       if (deleteTarget.type === 'practice') await repository.deletePractice(deleteTarget.id);
       else await repository.deleteProblem(deleteTarget.id, deleteTarget.practiceCount);
       setDeleteTarget(null);
-      setLoadAttempt(value => value + 1);
+      reload();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : '删除失败');
     } finally {
@@ -88,8 +91,9 @@ export function ProblemsPage() {
       <label>结束日期<input type="date" name="to" value={params.get('to') ?? ''} onChange={event => update('to', event.target.value)} /></label>
     </form>
     {!items.length ? <EmptyState title="没有匹配的题目" description="试试清除筛选条件，或记录一次新的练习。" action={<button type="button" onClick={() => setParams({})}>清除筛选</button>} />
-      : <table className="problem-table"><thead><tr><th>题号</th><th>题目</th><th>难度</th><th>练习</th><th>操作</th></tr></thead><tbody>{items.map(item => <tr key={item.problem.id}><td data-label="题号">{item.problem.frontendQuestionId}</td><td data-label="题目"><h2><Link to={`/problems/${item.problem.id}`}>{item.problem.titleZh}</Link></h2></td><td data-label="难度">{difficultyNames[item.problem.difficulty]}</td><td data-label="练习">{item.practices.length}</td><td data-label="操作"><button type="button" aria-expanded={isExpanded(item.problem.id)} onClick={() => setExpanded(value => value.includes(item.problem.id) ? value.filter(id => id !== item.problem.id) : [...value, item.problem.id])}>查看练习记录</button><button type="button" aria-label={`删除题目${item.problem.titleZh}`} onClick={() => beginDelete({ type: 'problem', id: item.problem.id, title: item.problem.titleZh, practiceCount: item.practices.length })}>删除题目</button>{isExpanded(item.problem.id) ? <ProblemDetails item={item} algorithms={dataset.algorithms} onDeletePractice={id => { const practice = item.practices.find(entry => entry.id === id)!; beginDelete({ type: 'practice', id, practicedOn: practice.practicedOn }); }} /> : null}</td></tr>)}</tbody></table>}
+      : <table className="problem-table"><thead><tr><th>题号</th><th>题目</th><th>难度</th><th>练习</th><th>操作</th></tr></thead><tbody>{items.map(item => <tr key={item.problem.id}><td data-label="题号">{item.problem.frontendQuestionId}</td><td data-label="题目"><h2><Link to={`/problems/${item.problem.id}`}>{item.problem.titleZh}</Link></h2></td><td data-label="难度">{difficultyNames[item.problem.difficulty]}</td><td data-label="练习">{item.practices.length}</td><td data-label="操作"><button type="button" aria-expanded={isExpanded(item.problem.id)} onClick={() => setExpanded(value => value.includes(item.problem.id) ? value.filter(id => id !== item.problem.id) : [...value, item.problem.id])}>查看练习记录</button><button type="button" aria-label={`删除题目${item.problem.titleZh}`} onClick={() => beginDelete({ type: 'problem', id: item.problem.id, title: item.problem.titleZh, practiceCount: item.practices.length })}>删除题目</button>{isExpanded(item.problem.id) ? <ProblemDetails item={item} algorithms={dataset.algorithms} onEditSolution={setEditingPractice} onDeletePractice={id => { const practice = item.practices.find(entry => entry.id === id)!; beginDelete({ type: 'practice', id, practicedOn: practice.practicedOn }); }} /> : null}</td></tr>)}</tbody></table>}
   </main>
+  <EditPracticeSolutionDialog practice={editingPractice} open={Boolean(editingPractice)} onClose={() => setEditingPractice(undefined)} onSaved={reload} />
   {deleteTarget && <Modal ariaLabelledBy="record-delete-heading" initialFocusRef={confirmationRef} returnFocusRef={deleteTrigger} onClose={() => setDeleteTarget(null)}>
     <h2 id="record-delete-heading">{deleteTarget.type === 'practice' ? '删除练习' : `删除题目${deleteTarget.title}`}</h2>
     {deleteTarget.type === 'practice' ? <p>将永久删除 {deleteTarget.practicedOn} 的这条练习。</p> : <p>将同时永久删除 {deleteTarget.practiceCount} 条练习</p>}

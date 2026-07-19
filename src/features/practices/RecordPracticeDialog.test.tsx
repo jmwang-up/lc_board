@@ -61,6 +61,56 @@ describe('RecordPracticeDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('records Markdown entered in the solution editor after previewing it', async () => {
+    const repo = repository();
+    renderDialog(repo);
+    await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+    await userEvent.type(screen.getByLabelText('题号'), '1');
+    await userEvent.type(screen.getByLabelText('中文题名'), '两数之和');
+    await userEvent.selectOptions(screen.getByLabelText('主要算法'), 'alg-1');
+    await userEvent.type(screen.getByLabelText('解题思路'), '## 思路\n- 使用哈希表');
+    await userEvent.click(screen.getByRole('tab', { name: '预览' }));
+    expect(screen.getByRole('heading', { name: '思路' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '保存练习' }));
+
+    await waitFor(() => expect(repo.recordPractice).toHaveBeenCalledWith(expect.objectContaining({
+      solutionMarkdown: '## 思路\n- 使用哈希表',
+    })));
+  });
+
+  it('records an empty solution as an empty string', async () => {
+    const repo = repository();
+    renderDialog(repo);
+    await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+    await userEvent.type(screen.getByLabelText('题号'), '1');
+    await userEvent.type(screen.getByLabelText('中文题名'), '两数之和');
+    await userEvent.selectOptions(screen.getByLabelText('主要算法'), 'alg-1');
+    await userEvent.click(screen.getByRole('button', { name: '保存练习' }));
+
+    await waitFor(() => expect(repo.recordPractice).toHaveBeenCalledWith(expect.objectContaining({
+      solutionMarkdown: '',
+    })));
+  });
+
+  it('blocks a solution longer than 20,000 characters with an accessible error', async () => {
+    const repo = repository();
+    renderDialog(repo);
+    await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+    await userEvent.type(screen.getByLabelText('题号'), '1');
+    await userEvent.type(screen.getByLabelText('中文题名'), '两数之和');
+    await userEvent.selectOptions(screen.getByLabelText('主要算法'), 'alg-1');
+    await userEvent.click(screen.getByLabelText('解题思路'));
+    await userEvent.paste('a'.repeat(20_001));
+
+    expect(screen.getByText('20001 / 20000')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保存练习' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('解题思路不能超过 20000 个字符');
+    expect(repo.recordPractice).not.toHaveBeenCalled();
+  });
+
   it('keeps the link and opens manual fields after an upstream failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: 'UPSTREAM_TIMEOUT' }), { status: 502 })));
     renderDialog(repository());
@@ -94,6 +144,22 @@ describe('RecordPracticeDialog', () => {
     expect(await screen.findByText('保存失败，请重试')).toBeInTheDocument();
     expect(screen.getByLabelText('中文题名')).toHaveValue('两数之和');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('preserves the Markdown solution when recording fails', async () => {
+    const repo = repository();
+    vi.mocked(repo.recordPractice).mockRejectedValue(new Error('db failed'));
+    renderDialog(repo);
+    await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+    await userEvent.type(screen.getByLabelText('题号'), '1');
+    await userEvent.type(screen.getByLabelText('中文题名'), '两数之和');
+    await userEvent.selectOptions(screen.getByLabelText('主要算法'), 'alg-1');
+    await userEvent.type(screen.getByLabelText('解题思路'), '失败后仍需保留的思路');
+    await userEvent.click(screen.getByRole('button', { name: '保存练习' }));
+
+    expect(await screen.findByText('保存失败，请重试')).toBeInTheDocument();
+    expect(screen.getByLabelText('解题思路')).toHaveValue('失败后仍需保留的思路');
   });
 
   it('links to data management when no algorithms exist', async () => {
@@ -141,7 +207,7 @@ describe('RecordPracticeDialog', () => {
   });
 
   it('rejects repeated secondary algorithms in the schema', () => {
-    const result = practiceFormSchema.safeParse({ url: 'https://leetcode.cn/problems/two-sum/', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', practicedOn: '2026-07-12', primaryAlgorithmId: 'alg-1', secondaryAlgorithmIds: ['alg-2', 'alg-2'] });
+    const result = practiceFormSchema.safeParse({ url: 'https://leetcode.cn/problems/two-sum/', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', practicedOn: '2026-07-12', primaryAlgorithmId: 'alg-1', secondaryAlgorithmIds: ['alg-2', 'alg-2'], solutionMarkdown: '' });
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path: ['secondaryAlgorithmIds'], message: '辅助算法不能重复' })]));
   });

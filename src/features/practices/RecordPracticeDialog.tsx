@@ -60,7 +60,7 @@ export function RecordPracticeDialog({ open, onClose, onSaved }: { open: boolean
     setSaveError(''); setSaving(true);
     try {
       const parsed = parseLeetCodeCnUrl(values.url);
-      await repository.recordPractice({ metadata: { slug: parsed.slug, url: parsed.url, frontendQuestionId: values.frontendQuestionId, titleZh: values.titleZh, difficulty: values.difficulty }, practicedOn: values.practicedOn, primaryAlgorithmId: values.primaryAlgorithmId, secondaryAlgorithmIds: values.secondaryAlgorithmIds });
+      await repository.recordPractice({ metadata: { slug: parsed.slug, url: parsed.url, frontendQuestionId: values.frontendQuestionId, titleZh: values.titleZh, difficulty: values.difficulty }, practicedOn: values.practicedOn, primaryAlgorithmId: values.primaryAlgorithmId, secondaryAlgorithmIds: values.secondaryAlgorithmIds, solutionMarkdown: values.solutionMarkdown });
       onSaved(); onClose();
     } catch { setSaveError('保存失败，请重试'); }
     finally { setSaving(false); }

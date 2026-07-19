@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { vi } from 'vitest';
@@ -16,8 +16,8 @@ const problems = [
   { id: 'p2', leetcodeSlug: 'two', frontendQuestionId: '21', titleZh: '寻找峰值', difficulty: 'medium' as const, url: '#', createdAt: '' },
 ];
 const practices = [
-  { id: 'old', problemId: 'p2', practicedOn: '2026-07-11', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '2026-07-11T09:00:00Z', updatedAt: '' },
-  { id: 'new', problemId: 'p2', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: ['binary-search'], solutionMarkdown: '', createdAt: '2026-07-12T09:00:00Z', updatedAt: '' },
+  { id: 'old', problemId: 'p2', practicedOn: '2026-07-11', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '## 旧思路\n- 枚举', createdAt: '2026-07-11T09:00:00Z', updatedAt: '' },
+  { id: 'new', problemId: 'p2', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: ['binary-search'], solutionMarkdown: '## 新思路\n- 二分查找', createdAt: '2026-07-12T09:00:00Z', updatedAt: '' },
   { id: 'other', problemId: 'p1', practicedOn: '2026-07-12', primaryAlgorithmId: 'binary-search', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '2026-07-12T10:00:00Z', updatedAt: '' },
 ];
 const repository = {
@@ -54,11 +54,63 @@ it('reads combined filters from the URL and expands newest-first labeled history
   expect(screen.queryByText('两数之和')).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: /查看练习记录/ }));
   const history = screen.getByRole('list', { name: '寻找峰值的练习记录' });
-  const entries = within(history).getAllByRole('listitem');
+  const entries = Array.from(history.children);
   expect(entries[0]).toHaveTextContent('2026-07-12');
   expect(entries[0]).toHaveTextContent('主：动态规划');
   expect(entries[0]).toHaveTextContent('辅：二分查找');
   expect(entries[1]).toHaveTextContent('2026-07-11');
+});
+
+it('renders each practice solution under its date and an empty-solution placeholder', async () => {
+  render(<RepositoryProvider repository={repository}><MemoryRouter initialEntries={['/problems']}>
+    <ProblemsPage />
+  </MemoryRouter></RepositoryProvider>);
+  const secondProblem = (await screen.findByRole('heading', { name: '寻找峰值' })).closest('tr')!;
+  await userEvent.click(within(secondProblem).getByRole('button', { name: '查看练习记录' }));
+  const secondHistory = screen.getByRole('list', { name: '寻找峰值的练习记录' });
+  const newPractice = within(secondHistory).getAllByRole('listitem').find(entry => within(entry).queryByText('2026-07-12'))!;
+  const oldPractice = within(secondHistory).getAllByRole('listitem').find(entry => within(entry).queryByText('2026-07-11'))!;
+  expect(within(newPractice).getByRole('heading', { name: '新思路' })).toBeInTheDocument();
+  expect(within(oldPractice).getByRole('heading', { name: '旧思路' })).toBeInTheDocument();
+
+  const firstProblem = screen.getByRole('heading', { name: '两数之和' }).closest('tr')!;
+  await userEvent.click(within(firstProblem).getByRole('button', { name: '查看练习记录' }));
+  expect(within(screen.getByRole('list', { name: '两数之和的练习记录' })).getByText('尚未记录解题思路')).toBeInTheDocument();
+});
+
+it('opens the solution editor with only the selected practice Markdown', async () => {
+  render(<RepositoryProvider repository={repository}><MemoryRouter initialEntries={['/problems/p2']}>
+    <Routes><Route path="/problems/:problemId" element={<ProblemsPage />} /></Routes>
+  </MemoryRouter></RepositoryProvider>);
+  const history = await screen.findByRole('list', { name: '寻找峰值的练习记录' });
+  const selectedPractice = Array.from(history.querySelectorAll<HTMLLIElement>(':scope > li')).find(entry => within(entry).queryByText('2026-07-12'))!;
+  await userEvent.click(within(selectedPractice).getByRole('button', { name: '编辑思路' }));
+
+  expect(screen.getByRole('dialog', { name: '编辑解题思路' })).toBeInTheDocument();
+  expect(screen.getByLabelText('解题思路')).toHaveValue('## 新思路\n- 二分查找');
+  expect(screen.getByLabelText('解题思路')).not.toHaveValue('## 旧思路\n- 枚举');
+});
+
+it('reloads history after saving an edited practice solution', async () => {
+  let currentPractices = [...practices];
+  const updatePracticeSolution = vi.fn(async (id: string, solutionMarkdown: string) => {
+    currentPractices = currentPractices.map(item => item.id === id ? { ...item, solutionMarkdown } : item);
+    return currentPractices.find(item => item.id === id)!;
+  });
+  const repo = { ...repository, listPractices: vi.fn(async () => currentPractices), updatePracticeSolution } as DashboardRepository;
+  render(<RepositoryProvider repository={repo}><MemoryRouter initialEntries={['/problems/p2']}>
+    <Routes><Route path="/problems/:problemId" element={<ProblemsPage />} /></Routes>
+  </MemoryRouter></RepositoryProvider>);
+  const history = await screen.findByRole('list', { name: '寻找峰值的练习记录' });
+  const selectedPractice = Array.from(history.querySelectorAll<HTMLLIElement>(':scope > li')).find(entry => within(entry).queryByText('2026-07-12'))!;
+  await userEvent.click(within(selectedPractice).getByRole('button', { name: '编辑思路' }));
+  const editor = screen.getByLabelText('解题思路');
+  await userEvent.clear(editor);
+  await userEvent.type(editor, '## 保存后的思路');
+  await userEvent.click(screen.getByRole('button', { name: '保存思路' }));
+
+  expect(await screen.findByRole('heading', { name: '保存后的思路' })).toBeInTheDocument();
+  await waitFor(() => expect(repo.listPractices).toHaveBeenCalledTimes(2));
 });
 
 it('shows only the requested problem on the detail route', async () => {

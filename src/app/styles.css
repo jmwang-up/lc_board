@@ -119,6 +119,7 @@ input:not([type="checkbox"]):not([type="color"]), select { padding: .65rem; bord
 .algorithm-swatch { width: 1rem; height: 1rem; border: 1px solid #697386; border-radius: .2rem; }
 .recent-list, .practice-history { display: grid; gap: .6rem; }
 .recent-list li, .practice-history li { display: flex; flex-wrap: wrap; gap: 1rem; }
+.practice-history .markdown-content, .practice-history li > p { flex-basis: 100%; margin: .15rem 0; }
 .problem-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
 .problem-filters label { display: grid; gap: .35rem; }
 .problem-filters input, .problem-filters select { min-width: 0; padding: .65rem; border: 1px solid #cdd2df; border-radius: .4rem; background: #fff; }
