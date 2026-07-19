@@ -35,4 +35,16 @@ describe('dashboard selectors', () => {
     expect(result[0].practices.map(practice => practice.id)).toEqual(['b']);
     expect(filterProblems(dataset, { query: ' 寻找 ' })[0].problem.id).toBe('p2');
   });
+
+  it('keeps a zero-practice problem in the unfiltered inventory', () => {
+    const unpracticed = {
+      id: 'p3', leetcodeSlug: 'three', frontendQuestionId: '42', titleZh: '尚未练习', difficulty: 'hard' as const,
+      url: 'https://leetcode.cn/problems/three', createdAt: '2026-01-01T00:00:00Z',
+    };
+
+    const result = filterProblems({ ...dataset, problems: [...dataset.problems, unpracticed] }, {});
+
+    expect(result.map(item => item.problem.id)).toEqual(['p1', 'p2', 'p3']);
+    expect(result.at(-1)?.practices).toEqual([]);
+  });
 });

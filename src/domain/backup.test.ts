@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Algorithm, Practice, Problem } from './models';
 import { mergeBackup, parseBackup, type BackupV2 } from './backup';
 
@@ -120,5 +120,59 @@ describe('mergeBackup', () => {
     );
     expect(result.practices.at(-1)?.primaryAlgorithmId).toBe(semanticLocal.id);
     expect(result.summary).toMatchObject({ addedAlgorithms: 0, addedPractices: 1, skippedIds: [problem.id, algorithm.id] });
+  });
+
+  it('plans a moderate remapping without rescanning local entity arrays', () => {
+    const size = 64;
+    const localProblems = Array.from({ length: size }, (_, index): Problem => ({
+      id: `local-problem-${index}`, leetcodeSlug: `problem-${index}`, frontendQuestionId: String(index),
+      titleZh: `题目 ${index}`, difficulty: 'medium', url: `https://leetcode.cn/problems/problem-${index}/`, createdAt: timestamp,
+    }));
+    const localAlgorithms = Array.from({ length: size }, (_, index): Algorithm => ({
+      id: `local-algorithm-${index}`, name: `算法 ${index}`, color: '#2563eb', createdAt: timestamp,
+    }));
+    const localPractices = Array.from({ length: size }, (_, index): Practice => ({
+      id: `local-practice-${index}`, problemId: `local-problem-${index}`, practicedOn: '2026-07-12',
+      primaryAlgorithmId: `local-algorithm-${index}`, secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: timestamp, updatedAt: timestamp,
+    }));
+    const importedProblems = localProblems.map((item, index) => ({ ...item, id: `import-problem-${index}` }));
+    const importedAlgorithms = localAlgorithms.map((item, index) => ({ ...item, id: `import-algorithm-${index}` }));
+    const importedPractices = localPractices.map((item, index) => ({
+      ...item, id: `import-practice-${index}`, problemId: `import-problem-${index}`, primaryAlgorithmId: `import-algorithm-${index}`,
+    }));
+    const findSpy = vi.spyOn(Array.prototype, 'find');
+    const someSpy = vi.spyOn(Array.prototype, 'some');
+    let result: ReturnType<typeof mergeBackup>;
+    let entityFindScans: number;
+    let practiceSomeScans: number;
+
+    try {
+      result = mergeBackup(
+        backup({ problems: localProblems, algorithms: localAlgorithms, practices: localPractices }),
+        backup({ problems: importedProblems, algorithms: importedAlgorithms, practices: importedPractices }),
+      );
+      entityFindScans = findSpy.mock.contexts.filter(value => {
+        if (!Array.isArray(value)) return false;
+        const item = value[0];
+        return item && typeof item === 'object' && ('leetcodeSlug' in item || ('name' in item && 'color' in item));
+      }).length;
+      practiceSomeScans = someSpy.mock.contexts.filter(value => {
+        if (!Array.isArray(value)) return false;
+        const item = value[0];
+        return item && typeof item === 'object' && 'practicedOn' in item;
+      }).length;
+    } finally {
+      findSpy.mockRestore();
+      someSpy.mockRestore();
+    }
+
+    expect({ entityFindScans, practiceSomeScans }).toEqual({ entityFindScans: 0, practiceSomeScans: 0 });
+    expect(result!.summary).toEqual({
+      addedProblems: 0, addedPractices: size, addedAlgorithms: 0,
+      skippedIds: [...importedProblems.map(item => item.id), ...importedAlgorithms.map(item => item.id)],
+    });
+    expect(result!.practices.slice(size).map(item => [item.id, item.problemId, item.primaryAlgorithmId])).toEqual(
+      importedPractices.map((item, index) => [item.id, localProblems[index].id, localAlgorithms[index].id]),
+    );
   });
 });

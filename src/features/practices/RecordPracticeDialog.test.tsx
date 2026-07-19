@@ -1,5 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryProvider } from '../../app/RepositoryContext';
@@ -27,9 +28,91 @@ function renderDialog(repo: DashboardRepository) {
   return { ...result, onClose, onSaved };
 }
 
+function LifecycleDialog({ repo, onSaved }: { repo: DashboardRepository; onSaved: () => void }) {
+  const [open, setOpen] = useState(true);
+  return <>
+    <button type="button" onClick={() => setOpen(true)}>打开记录</button>
+    <RepositoryProvider repository={repo}>
+      <MemoryRouter>
+        <RecordPracticeDialog open={open} onClose={() => setOpen(false)} onSaved={onSaved} />
+      </MemoryRouter>
+    </RepositoryProvider>
+  </>;
+}
+
+async function fillManualPractice() {
+  await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+  await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+  await userEvent.type(screen.getByLabelText('题号'), '1');
+  await userEvent.type(screen.getByLabelText('中文题名'), '两数之和');
+  await userEvent.selectOptions(screen.getByLabelText('主要算法'), 'alg-1');
+}
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe('RecordPracticeDialog', () => {
+  it('reopens with idle lookup state and ignores the closed session result', async () => {
+    let resolveLookup!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>(resolve => { resolveLookup = resolve; })));
+    render(<LifecycleDialog repo={repository()} onSaved={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '读取题目信息' }));
+
+    await userEvent.click(screen.getByRole('button', { name: '关闭' }));
+    await userEvent.click(screen.getByRole('button', { name: '打开记录' }));
+
+    expect(screen.getByRole('button', { name: '读取题目信息' })).toBeEnabled();
+    expect(screen.getByLabelText('LeetCode 题目链接')).toHaveValue('');
+    resolveLookup(new Response(JSON.stringify({
+      slug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy',
+      url: 'https://leetcode.cn/problems/two-sum/',
+    }), { status: 200 }));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByDisplayValue('两数之和')).not.toBeInTheDocument();
+  });
+
+  it('does not let a stale save completion close a reopened session', async () => {
+    const repo = repository();
+    let resolveSave!: (value: Awaited<ReturnType<DashboardRepository['recordPractice']>>) => void;
+    vi.mocked(repo.recordPractice).mockReturnValue(new Promise(resolve => { resolveSave = resolve; }));
+    const onSaved = vi.fn();
+    render(<LifecycleDialog repo={repo} onSaved={onSaved} />);
+    await fillManualPractice();
+    await userEvent.click(screen.getByRole('button', { name: '保存练习' }));
+    await waitFor(() => expect(repo.recordPractice).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: '关闭' }));
+    await userEvent.click(screen.getByRole('button', { name: '打开记录' }));
+    expect(screen.getByLabelText('LeetCode 题目链接')).toHaveValue('');
+
+    await act(async () => {
+      resolveSave({ problem: {} as never, practice: {} as never });
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('dialog', { name: '记录练习' })).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('uses a synchronous mutex to coalesce rapid valid submissions', async () => {
+    const repo = repository();
+    let resolveSave!: (value: Awaited<ReturnType<DashboardRepository['recordPractice']>>) => void;
+    vi.mocked(repo.recordPractice).mockReturnValue(new Promise(resolve => { resolveSave = resolve; }));
+    const { onSaved } = renderDialog(repo);
+    await fillManualPractice();
+    const form = screen.getByRole('button', { name: '保存练习' }).closest('form');
+    expect(form).not.toBeNull();
+
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    await waitFor(() => expect(repo.recordPractice).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      resolveSave({ problem: {} as never, practice: {} as never });
+      await Promise.resolve();
+    });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores metadata from a lookup invalidated by a URL edit', async () => {
     let resolveLookup!: (response: Response) => void;
     vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>(resolve => { resolveLookup = resolve; })));

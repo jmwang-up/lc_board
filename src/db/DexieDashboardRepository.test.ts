@@ -344,6 +344,43 @@ describe('backup invariants', () => {
     expect((await repo.listPractices()).at(-1)).toMatchObject({ problemId: problem.id, primaryAlgorithmId: algorithm.id });
   });
 
+  it('keeps remapped imports consistent with concurrent local deletions', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '哈希表', color: '#16a34a' });
+    const { problem } = await repo.recordPractice({
+      metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [],
+    });
+    const concurrentDatabase = new DashboardDatabase(database.name);
+    const concurrentRepo = new DexieDashboardRepository(concurrentDatabase);
+    const timestamp = '2026-07-13T00:00:00.000Z';
+
+    try {
+      const importing = repo.importBackup({
+        schemaVersion: 2, exportedAt: timestamp,
+        problems: [{ ...problem, id: 'import-problem' }],
+        algorithms: [{ ...algorithm, id: 'import-algorithm' }],
+        practices: [{
+          id: 'import-practice', problemId: 'import-problem', practicedOn: '2026-07-13',
+          primaryAlgorithmId: 'import-algorithm', secondaryAlgorithmIds: [], solutionMarkdown: '',
+          createdAt: timestamp, updatedAt: timestamp,
+        }],
+      });
+      const deletingProblem = concurrentRepo.deleteProblem(problem.id, 1).catch(error => error as Error);
+      const deletingAlgorithm = concurrentRepo.deleteUnusedAlgorithm(algorithm.id, 0).catch(error => error as Error);
+
+      await importing;
+      await Promise.all([deletingProblem, deletingAlgorithm]);
+
+      const [problems, practices, algorithms] = await Promise.all([repo.listProblems(), repo.listPractices(), repo.listAlgorithms()]);
+      const problemIds = new Set(problems.map(item => item.id));
+      const algorithmIds = new Set(algorithms.map(item => item.id));
+      expect(practices.every(item => problemIds.has(item.problemId)
+        && algorithmIds.has(item.primaryAlgorithmId)
+        && item.secondaryAlgorithmIds.every(id => algorithmIds.has(id)))).toBe(true);
+    } finally {
+      concurrentDatabase.close();
+    }
+  });
+
   it('does not write anything when an import is invalid', async () => {
     await expect(repo.importBackup({ schemaVersion: 1, exportedAt: '2026-07-12T00:00:00.000Z', problems: [], algorithms: [], practices: [{ id: 'p', problemId: 'missing' }] } as never))
       .rejects.toThrow();

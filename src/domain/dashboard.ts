@@ -33,6 +33,7 @@ export const comparePracticeNewestFirst = (left: Practice, right: Practice) =>
 
 export function filterProblems(dataset: DashboardDataset, filters: ProblemFilters): ProblemListItem[] {
   const query = filters.query?.trim().toLocaleLowerCase('zh-CN');
+  const hasPracticeFilter = Boolean(filters.primaryAlgorithmId || filters.secondaryAlgorithmId || filters.from || filters.to);
   return dataset.problems.flatMap(problem => {
     const visiblePractices = dataset.practices.filter(practice =>
       practice.problemId === problem.id
@@ -43,7 +44,7 @@ export function filterProblems(dataset: DashboardDataset, filters: ProblemFilter
     const textMatch = !query
       || problem.titleZh.toLocaleLowerCase('zh-CN').includes(query)
       || problem.frontendQuestionId.toLocaleLowerCase('zh-CN').startsWith(query);
-    return textMatch && (!filters.difficulty || problem.difficulty === filters.difficulty) && visiblePractices.length
+    return textMatch && (!filters.difficulty || problem.difficulty === filters.difficulty) && (!hasPracticeFilter || visiblePractices.length > 0)
       ? [{ problem, practices: visiblePractices.sort(comparePracticeNewestFirst) }]
       : [];
   });

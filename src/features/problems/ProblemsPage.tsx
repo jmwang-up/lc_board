@@ -52,6 +52,10 @@ export function ProblemsPage() {
   };
   const filteredItems = filterProblems(dataset, filters);
   const items = problemId ? filteredItems.filter(item => item.problem.id === problemId) : filteredItems;
+  const totalPracticeCounts = dataset.practices.reduce<Map<string, number>>((counts, practice) => {
+    counts.set(practice.problemId, (counts.get(practice.problemId) ?? 0) + 1);
+    return counts;
+  }, new Map());
   const update = (name: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(name, value);
@@ -91,7 +95,7 @@ export function ProblemsPage() {
       <label>结束日期<input type="date" name="to" value={params.get('to') ?? ''} onChange={event => update('to', event.target.value)} /></label>
     </form>
     {!items.length ? <EmptyState title="没有匹配的题目" description="试试清除筛选条件，或记录一次新的练习。" action={<button type="button" onClick={() => setParams({})}>清除筛选</button>} />
-      : <table className="problem-table"><thead><tr><th>题号</th><th>题目</th><th>难度</th><th>练习</th><th>操作</th></tr></thead><tbody>{items.map(item => <tr key={item.problem.id}><td data-label="题号">{item.problem.frontendQuestionId}</td><td data-label="题目"><h2><Link to={`/problems/${item.problem.id}`}>{item.problem.titleZh}</Link></h2></td><td data-label="难度">{difficultyNames[item.problem.difficulty]}</td><td data-label="练习">{item.practices.length}</td><td data-label="操作"><button type="button" aria-expanded={isExpanded(item.problem.id)} onClick={() => setExpanded(value => value.includes(item.problem.id) ? value.filter(id => id !== item.problem.id) : [...value, item.problem.id])}>查看练习记录</button><button type="button" aria-label={`删除题目${item.problem.titleZh}`} onClick={() => beginDelete({ type: 'problem', id: item.problem.id, title: item.problem.titleZh, practiceCount: item.practices.length })}>删除题目</button>{isExpanded(item.problem.id) ? <ProblemDetails item={item} algorithms={dataset.algorithms} onEditSolution={setEditingPractice} onDeletePractice={id => { const practice = item.practices.find(entry => entry.id === id)!; beginDelete({ type: 'practice', id, practicedOn: practice.practicedOn }); }} /> : null}</td></tr>)}</tbody></table>}
+      : <table className="problem-table"><thead><tr><th>题号</th><th>题目</th><th>难度</th><th>练习</th><th>操作</th></tr></thead><tbody>{items.map(item => <tr key={item.problem.id}><td data-label="题号">{item.problem.frontendQuestionId}</td><td data-label="题目"><h2><Link to={`/problems/${item.problem.id}`}>{item.problem.titleZh}</Link></h2></td><td data-label="难度">{difficultyNames[item.problem.difficulty]}</td><td data-label="练习">{item.practices.length}</td><td data-label="操作"><button type="button" aria-expanded={isExpanded(item.problem.id)} onClick={() => setExpanded(value => value.includes(item.problem.id) ? value.filter(id => id !== item.problem.id) : [...value, item.problem.id])}>查看练习记录</button><button type="button" aria-label={`删除题目${item.problem.titleZh}`} onClick={() => beginDelete({ type: 'problem', id: item.problem.id, title: item.problem.titleZh, practiceCount: totalPracticeCounts.get(item.problem.id) ?? 0 })}>删除题目</button>{isExpanded(item.problem.id) ? <ProblemDetails item={item} algorithms={dataset.algorithms} onEditSolution={setEditingPractice} onDeletePractice={id => { const practice = item.practices.find(entry => entry.id === id)!; beginDelete({ type: 'practice', id, practicedOn: practice.practicedOn }); }} /> : null}</td></tr>)}</tbody></table>}
   </main>
   <EditPracticeSolutionDialog practice={editingPractice} open={Boolean(editingPractice)} onClose={() => setEditingPractice(undefined)} onSaved={reload} />
   {deleteTarget && <Modal ariaLabelledBy="record-delete-heading" initialFocusRef={confirmationRef} returnFocusRef={deleteTrigger} onClose={() => setDeleteTarget(null)}>

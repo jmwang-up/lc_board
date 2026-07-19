@@ -34,4 +34,11 @@ describe('MarkdownContent', () => {
 
     expect(screen.queryByRole('link', { name: 'unsafe' })).toBeNull();
   });
+
+  it('renders external image syntax as inert accessible alt text', () => {
+    render(<MarkdownContent value="![tracking pixel](https://tracker.example/pixel.png)" />);
+
+    expect(document.querySelector('img')).toBeNull();
+    expect(screen.getByText('图片：tracking pixel')).toBeInTheDocument();
+  });
 });

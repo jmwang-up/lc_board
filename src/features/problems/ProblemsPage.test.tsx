@@ -122,6 +122,19 @@ it('shows only the requested problem on the detail route', async () => {
   expect(screen.getByRole('list', { name: '寻找峰值的练习记录' })).toBeInTheDocument();
 });
 
+it('shows a problem with zero practices in the full inventory', async () => {
+  const unpracticed = {
+    id: 'p3', leetcodeSlug: 'three', frontendQuestionId: '42', titleZh: '尚未练习', difficulty: 'hard' as const,
+    url: '#', createdAt: '',
+  };
+  const repo = { ...repository, listProblems: async () => [...problems, unpracticed] } as DashboardRepository;
+
+  render(<RepositoryProvider repository={repo}><MemoryRouter initialEntries={['/problems']}><ProblemsPage /></MemoryRouter></RepositoryProvider>);
+
+  const row = (await screen.findByRole('heading', { name: '尚未练习' })).closest('tr')!;
+  expect(within(row).getAllByRole('cell')[3]).toHaveTextContent('0');
+});
+
 it('confirms individual practice deletion and reloads history after success', async () => {
   let currentPractices = [...practices];
   const deletePractice = vi.fn(async (id: string) => { currentPractices = currentPractices.filter(item => item.id !== id); });
@@ -168,6 +181,21 @@ it('confirms problem cascade with the exact affected practice count and reloads 
   expect(await screen.findByRole('heading', { name: '两数之和' })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: '寻找峰值' })).not.toBeInTheDocument();
   expect(repo.listProblems).toHaveBeenCalledTimes(2);
+});
+
+it('uses the full practice count when filters hide some problem history', async () => {
+  const deleteProblem = vi.fn().mockResolvedValue(undefined);
+  const repo = { ...repository, deleteProblem } as DashboardRepository;
+  render(<RepositoryProvider repository={repo}><MemoryRouter initialEntries={['/problems?from=2026-07-12&to=2026-07-12']}><ProblemsPage /></MemoryRouter></RepositoryProvider>);
+  const row = (await screen.findByRole('heading', { name: '寻找峰值' })).closest('tr')!;
+
+  await userEvent.click(within(row).getByRole('button', { name: '删除题目寻找峰值' }));
+
+  const dialog = screen.getByRole('dialog', { name: '删除题目寻找峰值' });
+  expect(within(dialog).getByText('将同时永久删除 2 条练习')).toBeInTheDocument();
+  await userEvent.click(within(dialog).getByRole('checkbox', { name: '我确认删除寻找峰值及 2 条练习' }));
+  await userEvent.click(within(dialog).getByRole('button', { name: '确认删除题目及 2 条练习' }));
+  expect(deleteProblem).toHaveBeenCalledWith('p2', 2);
 });
 
 it('keeps deletion failures accessible inside the confirmation modal', async () => {

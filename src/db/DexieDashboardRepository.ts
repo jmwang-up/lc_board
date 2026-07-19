@@ -192,20 +192,26 @@ export class DexieDashboardRepository implements DashboardRepository {
 
   async importBackup(input: unknown): Promise<MergeResult['summary']> {
     const imported = parseBackup(input);
-    const local = await this.exportBackup();
-    const merged = mergeBackup(local, imported);
-    const localProblemIds = new Set(local.problems.map(item => item.id));
-    const localPracticeIds = new Set(local.practices.map(item => item.id));
-    const localAlgorithmIds = new Set(local.algorithms.map(item => item.id));
-    const problems = merged.problems.filter(item => !localProblemIds.has(item.id));
-    const practices = merged.practices.filter(item => !localPracticeIds.has(item.id));
-    const algorithms = merged.algorithms.filter(item => !localAlgorithmIds.has(item.id));
-    await this.database.transaction('rw', this.database.problems, this.database.practices, this.database.algorithms, async () => {
+    return this.database.transaction('rw', this.database.problems, this.database.practices, this.database.algorithms, async () => {
+      const local: BackupV2 = {
+        schemaVersion: 2,
+        exportedAt: new Date().toISOString(),
+        problems: await this.database.problems.toArray(),
+        practices: await this.database.practices.toArray(),
+        algorithms: await this.database.algorithms.toArray(),
+      };
+      const merged = mergeBackup(local, imported);
+      const localProblemIds = new Set(local.problems.map(item => item.id));
+      const localPracticeIds = new Set(local.practices.map(item => item.id));
+      const localAlgorithmIds = new Set(local.algorithms.map(item => item.id));
+      const problems = merged.problems.filter(item => !localProblemIds.has(item.id));
+      const practices = merged.practices.filter(item => !localPracticeIds.has(item.id));
+      const algorithms = merged.algorithms.filter(item => !localAlgorithmIds.has(item.id));
       await this.database.problems.bulkAdd(problems);
       await this.database.algorithms.bulkAdd(algorithms);
       await this.database.practices.bulkAdd(practices);
+      return merged.summary;
     });
-    return merged.summary;
   }
 
   private async assertUniqueAlgorithmName(name: string, ignoredId?: string): Promise<void> {

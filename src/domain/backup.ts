@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SOLUTION_MARKDOWN_MAX_LENGTH, type Algorithm, type Problem } from './models';
+import { SOLUTION_MARKDOWN_MAX_LENGTH } from './models';
 
 const isoDateTime = z.string().datetime();
 const id = z.string().trim().min(1);
@@ -79,9 +79,6 @@ export function parseBackup(input: unknown): BackupV2 {
   return value;
 }
 
-function sameProblem(left: Problem, right: Problem): boolean { return normalize(left.leetcodeSlug) === normalize(right.leetcodeSlug); }
-function sameAlgorithm(left: Algorithm, right: Algorithm): boolean { return normalize(left.name) === normalize(right.name); }
-
 export function mergeBackup(localInput: BackupV2, importedInput: BackupV2): MergeResult {
   const local = parseBackup(localInput);
   const imported = parseBackup(importedInput);
@@ -93,18 +90,23 @@ export function mergeBackup(localInput: BackupV2, importedInput: BackupV2): Merg
   const unsafeProblemIds = new Set<string>();
   const unsafeAlgorithmIds = new Set<string>();
   const skippedIds: string[] = [];
+  const localProblemsById = new Map(local.problems.map(item => [item.id, item]));
+  const localProblemsBySlug = new Map(local.problems.map(item => [normalize(item.leetcodeSlug), item]));
+  const localAlgorithmsById = new Map(local.algorithms.map(item => [item.id, item]));
+  const localAlgorithmsByName = new Map(local.algorithms.map(item => [normalize(item.name), item]));
+  const localPracticeIds = new Set(local.practices.map(item => item.id));
 
   for (const item of imported.problems) {
-    const byId = local.problems.find(localItem => localItem.id === item.id);
-    const semanticMatch = local.problems.find(localItem => sameProblem(localItem, item));
+    const byId = localProblemsById.get(item.id);
+    const semanticMatch = localProblemsBySlug.get(normalize(item.leetcodeSlug));
     if (byId && !semanticMatch) unsafeProblemIds.add(item.id);
     const match = semanticMatch ?? byId;
     if (match) { problemMap.set(item.id, match.id); skippedIds.push(item.id); }
     else { problems.push(item); problemMap.set(item.id, item.id); }
   }
   for (const item of imported.algorithms) {
-    const byId = local.algorithms.find(localItem => localItem.id === item.id);
-    const semanticMatch = local.algorithms.find(localItem => sameAlgorithm(localItem, item));
+    const byId = localAlgorithmsById.get(item.id);
+    const semanticMatch = localAlgorithmsByName.get(normalize(item.name));
     if (byId && !semanticMatch) unsafeAlgorithmIds.add(item.id);
     const match = semanticMatch ?? byId;
     if (match) { algorithmMap.set(item.id, match.id); skippedIds.push(item.id); }
@@ -112,7 +114,7 @@ export function mergeBackup(localInput: BackupV2, importedInput: BackupV2): Merg
   }
   let addedPractices = 0;
   for (const item of imported.practices) {
-    if (local.practices.some(localItem => localItem.id === item.id)) { skippedIds.push(item.id); continue; }
+    if (localPracticeIds.has(item.id)) { skippedIds.push(item.id); continue; }
     if (unsafeProblemIds.has(item.problemId) || unsafeAlgorithmIds.has(item.primaryAlgorithmId) || item.secondaryAlgorithmIds.some(itemId => unsafeAlgorithmIds.has(itemId))) {
       throw new Error('导入引用无法安全重映射');
     }

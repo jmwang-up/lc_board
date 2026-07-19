@@ -16,6 +16,7 @@ export function MarkdownContent({ value }: { value: string }) {
         a: ({ href, children }) => href
           ? <a href={href} target={/^https?:/i.test(href) ? '_blank' : undefined} rel={/^https?:/i.test(href) ? 'noopener noreferrer' : undefined}>{children}</a>
           : <span>{children}</span>,
+        img: ({ alt }) => <span className="markdown-image-placeholder">{alt ? `图片：${alt}` : '图片'}</span>,
       }}
     >{value}</ReactMarkdown>
   </div>;

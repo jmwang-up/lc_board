@@ -6,9 +6,9 @@ import { useAlgorithms } from './useAlgorithms';
 
 const messageFor = (cause: unknown, fallback: string) => cause instanceof Error ? cause.message : fallback;
 
-export function AlgorithmManager() {
+export function AlgorithmManager({ reloadVersion = 0 }: { reloadVersion?: number } = {}) {
   const repository = useRepository();
-  const { algorithms, reload, loading, loadError } = useAlgorithms();
+  const { algorithms, reload, loading, loadError } = useAlgorithms(reloadVersion);
   const [name, setName] = useState('');
   const [color, setColor] = useState('#2563eb');
   const [error, setError] = useState('');

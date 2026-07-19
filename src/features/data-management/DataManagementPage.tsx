@@ -24,6 +24,7 @@ export function DataManagementPage() {
   const [counts, setCounts] = useState({ problems: 0, practices: 0, algorithms: 0 });
   const [clearError, setClearError] = useState('');
   const [clearPending, setClearPending] = useState(false);
+  const [algorithmReloadVersion, setAlgorithmReloadVersion] = useState(0);
   const clearTrigger = useRef<HTMLButtonElement>(null);
   const continueButton = useRef<HTMLButtonElement>(null);
 
@@ -55,6 +56,7 @@ export function DataManagementPage() {
       let backup;
       try { backup = parseBackup(json); } catch (cause) { throw new Error(messageFor(cause, '备份文件无效'), { cause }); }
       const summary = await repository.importBackup(backup);
+      setAlgorithmReloadVersion(value => value + 1);
       setMessage(`导入成功：新增 ${summary.addedProblems} 道题目、${summary.addedPractices} 条练习、${summary.addedAlgorithms} 个算法`);
     } catch (cause) {
       setError(messageFor(cause, '导入数据失败'));
@@ -72,6 +74,7 @@ export function DataManagementPage() {
       await repository.clearAll(counts);
       setConfirmation('');
       setClearStage(0);
+      setAlgorithmReloadVersion(value => value + 1);
       setMessage('全部本地数据已清空');
     } catch (cause) {
       setClearError(messageFor(cause, '清空数据失败'));
@@ -94,7 +97,7 @@ export function DataManagementPage() {
   }
 
   return <>
-    <AlgorithmManager />
+    <AlgorithmManager reloadVersion={algorithmReloadVersion} />
     <section aria-labelledby="backup-heading">
       <h2 id="backup-heading">备份与恢复</h2>
       <button type="button" onClick={() => void exportData()}>导出数据</button>

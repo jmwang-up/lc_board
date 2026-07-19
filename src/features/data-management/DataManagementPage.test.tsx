@@ -63,6 +63,47 @@ it('shows a successful merge summary', async () => {
   expect(await screen.findByRole('status')).toHaveTextContent('新增 2 道题目、3 条练习、1 个算法');
 });
 
+it('shows newly imported algorithms without remounting the page', async () => {
+  const importedAlgorithm = {
+    id: 'graph', name: '图论', color: '#2563eb', createdAt: '2026-07-12T00:00:00.000Z',
+  };
+  const importedBackup: BackupV2 = { ...emptyBackup, algorithms: [importedAlgorithm] };
+  let currentAlgorithms: typeof importedBackup.algorithms = [];
+  const repo = repository({
+    async listAlgorithms() { return [...currentAlgorithms]; },
+    async importBackup() {
+      currentAlgorithms = [...importedBackup.algorithms];
+      return { addedProblems: 0, addedPractices: 0, addedAlgorithms: 1, skippedIds: [] };
+    },
+  });
+  renderPage(repo);
+  expect(await screen.findByText('还没有算法分类，请先创建一个。')).toBeInTheDocument();
+
+  await userEvent.upload(screen.getByLabelText('选择备份文件'), new File([JSON.stringify(importedBackup)], 'backup.json', { type: 'application/json' }));
+
+  expect(await screen.findByText('图论')).toBeInTheDocument();
+});
+
+it('removes cleared algorithms from the manager without navigation', async () => {
+  let currentAlgorithms = [{ id: 'dp', name: '动态规划', color: '#2563eb', createdAt: '2026-07-12T00:00:00.000Z' }];
+  const repo = repository({
+    async listAlgorithms() { return [...currentAlgorithms]; },
+    async getDataCounts() { return { problems: 0, practices: 0, algorithms: 1 }; },
+    async clearAll() { currentAlgorithms = []; },
+  });
+  renderPage(repo);
+  expect(await screen.findByText('动态规划')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: '开始清空全部数据' }));
+  const dialog = screen.getByRole('dialog', { name: '确认清空全部数据' });
+  await userEvent.click(within(dialog).getByRole('button', { name: '继续' }));
+  await userEvent.type(within(dialog).getByLabelText('确认文字'), '清空全部数据');
+  await userEvent.click(within(dialog).getByRole('button', { name: '清空全部数据' }));
+
+  expect(await screen.findByText('还没有算法分类，请先创建一个。')).toBeInTheDocument();
+  expect(screen.queryByText('动态规划')).not.toBeInTheDocument();
+});
+
 it('shows current entity counts in a two-stage modal and requires the exact clear-all phrase', async () => {
   const clearAll = vi.fn();
   renderPage(repository({
