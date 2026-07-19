@@ -3,7 +3,7 @@ import remarkGfm from 'remark-gfm';
 
 const safeUrlTransform = (url: string) => {
   const transformed = defaultUrlTransform(url);
-  return /^(https?:|mailto:|\/|#)/i.test(transformed) ? transformed : '';
+  return /^(https?:|mailto:|#|\/(?!\/))/i.test(transformed) ? transformed : '';
 };
 
 export function MarkdownContent({ value }: { value: string }) {

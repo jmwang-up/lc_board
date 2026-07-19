@@ -28,4 +28,10 @@ describe('MarkdownContent', () => {
     expect(screen.getByRole('link', { name: 'path' })).toHaveAttribute('href', '/problems');
     expect(screen.getByRole('link', { name: 'section' })).not.toHaveAttribute('target');
   });
+
+  it('rejects protocol-relative links', () => {
+    render(<MarkdownContent value="[unsafe](//evil.example/path)" />);
+
+    expect(screen.queryByRole('link', { name: 'unsafe' })).toBeNull();
+  });
 });
