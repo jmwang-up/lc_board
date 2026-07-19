@@ -12,6 +12,7 @@ const repository: DashboardRepository = {
   async deleteUnusedAlgorithm() {},
   async deleteAlgorithmAndPractices() {},
   async recordPractice() { throw new Error('not implemented'); },
+  async updatePracticeSolution() { throw new Error('not implemented'); },
   async listAlgorithms() { return []; },
   async listProblems() { return []; },
   async listPractices() { return []; },

@@ -6,6 +6,7 @@ export interface RecordPracticeInput {
   practicedOn: string;
   primaryAlgorithmId: string;
   secondaryAlgorithmIds: string[];
+  solutionMarkdown?: string;
 }
 
 export interface DataCounts { problems: number; practices: number; algorithms: number }
@@ -17,6 +18,7 @@ export interface DashboardRepository {
   deleteUnusedAlgorithm(id: string, expectedAffectedCount: number): Promise<void>;
   deleteAlgorithmAndPractices(id: string, expectedAffectedCount: number): Promise<void>;
   recordPractice(input: RecordPracticeInput): Promise<{ problem: Problem; practice: Practice }>;
+  updatePracticeSolution(practiceId: string, solutionMarkdown: string): Promise<Practice>;
   listAlgorithms(): Promise<Algorithm[]>;
   listProblems(): Promise<Problem[]>;
   listPractices(): Promise<Practice[]>;

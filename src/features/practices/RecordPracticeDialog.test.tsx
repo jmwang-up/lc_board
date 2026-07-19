@@ -11,6 +11,7 @@ function repository(algorithm = true): DashboardRepository {
   return {
     createAlgorithm: vi.fn(), renameAlgorithm: vi.fn(), replaceAndDeleteAlgorithm: vi.fn(), deleteUnusedAlgorithm: vi.fn(), deleteAlgorithmAndPractices: vi.fn(),
     recordPractice: vi.fn().mockResolvedValue({ problem: {}, practice: {} }),
+    updatePracticeSolution: vi.fn(),
     listAlgorithms: vi.fn().mockResolvedValue(algorithm ? [{ id: 'alg-1', name: '哈希表', color: '#fff', createdAt: '' }] : []),
     listProblems: vi.fn().mockResolvedValue([]), listPractices: vi.fn().mockResolvedValue([]),
     deletePractice: vi.fn(), deleteProblem: vi.fn(), clearAll: vi.fn(),

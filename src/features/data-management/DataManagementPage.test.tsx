@@ -13,6 +13,7 @@ function repository(overrides: Partial<DashboardRepository> = {}): DashboardRepo
     async createAlgorithm() { throw new Error('not implemented'); }, async renameAlgorithm() {}, async replaceAndDeleteAlgorithm() {},
     async deleteUnusedAlgorithm() {}, async deleteAlgorithmAndPractices() {},
     async recordPractice() { throw new Error('not implemented'); }, async listAlgorithms() { return []; }, async listProblems() { return []; },
+    async updatePracticeSolution() { throw new Error('not implemented'); },
     async listPractices() { return []; }, async deletePractice() {}, async deleteProblem() {}, async clearAll() {},
     async getDataCounts() { return { problems: 0, practices: 0, algorithms: 0 }; },
     async exportBackup() { return emptyBackup; }, async importBackup() { return { addedProblems: 0, addedPractices: 0, addedAlgorithms: 0, skippedIds: [] }; },

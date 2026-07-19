@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Algorithm, Problem } from './models';
+import { SOLUTION_MARKDOWN_MAX_LENGTH, type Algorithm, type Problem } from './models';
 
 const isoDateTime = z.string().datetime();
 const id = z.string().trim().min(1);
@@ -20,7 +20,7 @@ export const problemSchema = z.object({
 export const algorithmSchema = z.object({ id, name: z.string().trim().min(1), color: z.string().min(1), createdAt: isoDateTime }).strict();
 export const practiceSchema = z.object({
   id, problemId: id, practicedOn: localDate, primaryAlgorithmId: id,
-  secondaryAlgorithmIds: z.array(id), createdAt: isoDateTime, updatedAt: isoDateTime,
+  secondaryAlgorithmIds: z.array(id), solutionMarkdown: z.string().max(SOLUTION_MARKDOWN_MAX_LENGTH).default(''), createdAt: isoDateTime, updatedAt: isoDateTime,
 }).strict();
 
 export const backupV1Schema = z.object({

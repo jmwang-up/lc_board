@@ -11,9 +11,9 @@ const dataset: DashboardDataset = {
     { id: 'p2', leetcodeSlug: 'two', frontendQuestionId: '21', titleZh: '寻找峰值', difficulty: 'medium', url: 'https://leetcode.cn/problems/two', createdAt: '2026-01-01T00:00:00Z' },
   ],
   practices: [
-    { id: 'a', problemId: 'p1', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '2026-07-12T09:00:00Z', updatedAt: '2026-07-12T09:00:00Z' },
-    { id: 'b', problemId: 'p2', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: ['binary-search'], createdAt: '2026-07-12T10:00:00Z', updatedAt: '2026-07-12T10:00:00Z' },
-    { id: 'c', problemId: 'p2', practicedOn: '2026-07-11', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '2026-07-11T10:00:00Z', updatedAt: '2026-07-11T10:00:00Z' },
+    { id: 'a', problemId: 'p1', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '2026-07-12T09:00:00Z', updatedAt: '2026-07-12T09:00:00Z' },
+    { id: 'b', problemId: 'p2', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: ['binary-search'], solutionMarkdown: '', createdAt: '2026-07-12T10:00:00Z', updatedAt: '2026-07-12T10:00:00Z' },
+    { id: 'c', problemId: 'p2', practicedOn: '2026-07-11', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '2026-07-11T10:00:00Z', updatedAt: '2026-07-11T10:00:00Z' },
   ],
 };
 

@@ -16,9 +16,9 @@ const problems = [
   { id: 'p2', leetcodeSlug: 'two', frontendQuestionId: '21', titleZh: '寻找峰值', difficulty: 'medium' as const, url: '#', createdAt: '' },
 ];
 const practices = [
-  { id: 'old', problemId: 'p2', practicedOn: '2026-07-11', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '2026-07-11T09:00:00Z', updatedAt: '' },
-  { id: 'new', problemId: 'p2', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: ['binary-search'], createdAt: '2026-07-12T09:00:00Z', updatedAt: '' },
-  { id: 'other', problemId: 'p1', practicedOn: '2026-07-12', primaryAlgorithmId: 'binary-search', secondaryAlgorithmIds: [], createdAt: '2026-07-12T10:00:00Z', updatedAt: '' },
+  { id: 'old', problemId: 'p2', practicedOn: '2026-07-11', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '2026-07-11T09:00:00Z', updatedAt: '' },
+  { id: 'new', problemId: 'p2', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: ['binary-search'], solutionMarkdown: '', createdAt: '2026-07-12T09:00:00Z', updatedAt: '' },
+  { id: 'other', problemId: 'p1', practicedOn: '2026-07-12', primaryAlgorithmId: 'binary-search', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '2026-07-12T10:00:00Z', updatedAt: '' },
 ];
 const repository = {
   listAlgorithms: async () => algorithms,

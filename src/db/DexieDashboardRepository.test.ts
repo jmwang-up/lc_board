@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardDatabase } from './DashboardDatabase';
 import { DexieDashboardRepository } from './DexieDashboardRepository';
@@ -24,6 +25,48 @@ afterEach(async () => {
 });
 
 describe('practice invariants', () => {
+  it('stores an optional solution and defaults missing content to empty text', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '哈希表', color: '#2563eb' });
+    const withSolution = await repo.recordPractice({
+      metadata, practicedOn: '2026-07-19', primaryAlgorithmId: algorithm.id,
+      secondaryAlgorithmIds: [], solutionMarkdown: '## 思路\n使用哈希表。',
+    });
+    const withoutSolution = await repo.recordPractice({
+      metadata, practicedOn: '2026-07-20', primaryAlgorithmId: algorithm.id,
+      secondaryAlgorithmIds: [],
+    });
+
+    expect(withSolution.practice.solutionMarkdown).toBe('## 思路\n使用哈希表。');
+    expect(withoutSolution.practice.solutionMarkdown).toBe('');
+  });
+
+  it('updates only one practice solution and its updated time', async () => {
+    const algorithm = await repo.createAlgorithm({ name: '双指针', color: '#16a34a' });
+    const { practice } = await repo.recordPractice({
+      metadata, practicedOn: '2026-07-19', primaryAlgorithmId: algorithm.id,
+      secondaryAlgorithmIds: [], solutionMarkdown: '旧思路',
+    });
+    const { practice: untouched } = await repo.recordPractice({
+      metadata, practicedOn: '2026-07-20', primaryAlgorithmId: algorithm.id,
+      secondaryAlgorithmIds: [], solutionMarkdown: '保持不变',
+    });
+
+    const updated = await repo.updatePracticeSolution(practice.id, '新思路');
+
+    expect(updated).toMatchObject({
+      id: practice.id, problemId: practice.problemId, practicedOn: practice.practicedOn,
+      primaryAlgorithmId: practice.primaryAlgorithmId, secondaryAlgorithmIds: [], solutionMarkdown: '新思路',
+    });
+    expect(updated.updatedAt >= practice.updatedAt).toBe(true);
+    expect((await repo.listPractices()).find(item => item.id === untouched.id))
+      .toMatchObject({ solutionMarkdown: '保持不变', updatedAt: untouched.updatedAt });
+  });
+
+  it('rejects a missing practice and the 20,001-character boundary', async () => {
+    await expect(repo.updatePracticeSolution('missing', '内容')).rejects.toThrow('练习已不存在');
+    await expect(repo.updatePracticeSolution('missing', 'x'.repeat(20_001))).rejects.toThrow('解题思路不能超过 20000 个字符');
+  });
+
   it('reuses a problem and creates a new practice every time', async () => {
     const algorithm = await repo.createAlgorithm({ name: '双指针', color: '#2563eb' });
     const input = { metadata, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [] };
@@ -53,6 +96,32 @@ describe('practice invariants', () => {
       .rejects.toThrow('辅助算法不能重复');
     expect(await repo.listProblems()).toEqual([]);
     expect(await repo.listPractices()).toEqual([]);
+  });
+});
+
+describe('database migrations', () => {
+  it('adds empty solution text to every version-1 practice without changing other properties', async () => {
+    const name = crypto.randomUUID();
+    const legacy = new Dexie(name);
+    legacy.version(1).stores({
+      problems: 'id, &leetcodeSlug, frontendQuestionId, titleZh, difficulty',
+      practices: 'id, problemId, practicedOn, primaryAlgorithmId, *secondaryAlgorithmIds',
+      algorithms: 'id, name, createdAt',
+    });
+    const legacyPractice = {
+      id: 'practice', problemId: 'problem', practicedOn: '2026-07-19', primaryAlgorithmId: 'algorithm',
+      secondaryAlgorithmIds: ['secondary'], createdAt: '2026-07-19T00:00:00.000Z', updatedAt: '2026-07-19T00:00:00.000Z',
+    };
+
+    await legacy.table('practices').add(legacyPractice);
+    legacy.close();
+
+    const migrated = new DashboardDatabase(name);
+    await migrated.open();
+
+    expect(await migrated.practices.get(legacyPractice.id)).toEqual({ ...legacyPractice, solutionMarkdown: '' });
+
+    await migrated.delete();
   });
 });
 
@@ -144,7 +213,7 @@ describe('deletion invariants', () => {
     const timestamp = '2026-07-12T00:00:00.000Z';
     await database.problems.add({ id: 'problem', leetcodeSlug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: metadata.url, createdAt: timestamp });
     await database.algorithms.add({ id: 'algorithm', name: '双指针', color: '#2563eb', createdAt: timestamp });
-    await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp });
+    await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: timestamp, updatedAt: timestamp });
 
     await repo.clearAll({ problems: 1, practices: 1, algorithms: 1 });
 
@@ -169,7 +238,7 @@ describe('deletion invariants', () => {
     const timestamp = '2026-07-12T00:00:00.000Z';
     await database.problems.add({ id: 'problem', leetcodeSlug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: metadata.url, createdAt: timestamp });
     await database.algorithms.add({ id: 'algorithm', name: '双指针', color: '#2563eb', createdAt: timestamp });
-    await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp });
+    await database.practices.add({ id: 'practice', problemId: 'problem', practicedOn: '2026-07-12', primaryAlgorithmId: 'algorithm', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: timestamp, updatedAt: timestamp });
     vi.spyOn(database.algorithms, 'clear').mockRejectedValueOnce(new Error('clear failed'));
 
     await expect(repo.clearAll({ problems: 1, practices: 1, algorithms: 1 })).rejects.toThrow('clear failed');
@@ -230,7 +299,7 @@ describe('backup invariants', () => {
       schemaVersion: 1, exportedAt: timestamp,
       problems: [{ ...problem, id: 'import-problem' }],
       algorithms: [{ ...algorithm, id: 'import-algorithm' }],
-      practices: [{ id: 'import-practice', problemId: 'import-problem', practicedOn: '2026-07-13', primaryAlgorithmId: 'import-algorithm', secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp }],
+      practices: [{ id: 'import-practice', problemId: 'import-problem', practicedOn: '2026-07-13', primaryAlgorithmId: 'import-algorithm', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: timestamp, updatedAt: timestamp }],
     });
 
     expect(summary).toMatchObject({ addedProblems: 0, addedAlgorithms: 0, addedPractices: 1 });

@@ -1,4 +1,4 @@
-import type { Algorithm, Practice, Problem } from '../domain/models';
+import { SOLUTION_MARKDOWN_MAX_LENGTH, type Algorithm, type Practice, type Problem } from '../domain/models';
 import { mergeBackup, parseBackup, type BackupV1, type MergeResult } from '../domain/backup';
 import { DashboardDatabase } from './DashboardDatabase';
 import type { DashboardRepository, DataCounts, RecordPracticeInput } from './DashboardRepository';
@@ -15,6 +15,12 @@ function assertLocalDate(value: string): void {
   const date = new Date(year, month - 1, day);
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
     throw new Error('练习日期无效');
+  }
+}
+
+function assertSolutionMarkdown(value: string): void {
+  if (value.length > SOLUTION_MARKDOWN_MAX_LENGTH) {
+    throw new Error('解题思路不能超过 20000 个字符');
   }
 }
 
@@ -88,6 +94,7 @@ export class DexieDashboardRepository implements DashboardRepository {
 
   async recordPractice(input: RecordPracticeInput): Promise<{ problem: Problem; practice: Practice }> {
     assertLocalDate(input.practicedOn);
+    assertSolutionMarkdown(input.solutionMarkdown ?? '');
     if (new Set(input.secondaryAlgorithmIds).size !== input.secondaryAlgorithmIds.length) throw new Error('辅助算法不能重复');
     if (input.secondaryAlgorithmIds.includes(input.primaryAlgorithmId)) throw new Error('辅助算法不能与主要算法重复');
 
@@ -116,6 +123,7 @@ export class DexieDashboardRepository implements DashboardRepository {
         practicedOn: input.practicedOn,
         primaryAlgorithmId: input.primaryAlgorithmId,
         secondaryAlgorithmIds: [...input.secondaryAlgorithmIds],
+        solutionMarkdown: input.solutionMarkdown ?? '',
         createdAt: now,
         updatedAt: now,
       };
@@ -127,6 +135,16 @@ export class DexieDashboardRepository implements DashboardRepository {
   listAlgorithms(): Promise<Algorithm[]> { return this.database.algorithms.toArray(); }
   listProblems(): Promise<Problem[]> { return this.database.problems.toArray(); }
   listPractices(): Promise<Practice[]> { return this.database.practices.toArray(); }
+  async updatePracticeSolution(practiceId: string, solutionMarkdown: string): Promise<Practice> {
+    assertSolutionMarkdown(solutionMarkdown);
+    return this.database.transaction('rw', this.database.practices, async () => {
+      const practice = await this.database.practices.get(practiceId);
+      if (!practice) throw new Error('练习已不存在');
+      const updated = { ...practice, solutionMarkdown, updatedAt: new Date().toISOString() };
+      await this.database.practices.put(updated);
+      return updated;
+    });
+  }
   deletePractice(id: string): Promise<void> { return this.database.practices.delete(id); }
 
   async deleteProblem(id: string, expectedPracticeCount: number): Promise<void> {

@@ -13,5 +13,14 @@ export class DashboardDatabase extends Dexie {
       practices: 'id, problemId, practicedOn, primaryAlgorithmId, *secondaryAlgorithmIds',
       algorithms: 'id, name, createdAt',
     });
+    this.version(2).stores({
+      problems: 'id, &leetcodeSlug, frontendQuestionId, titleZh, difficulty',
+      practices: 'id, problemId, practicedOn, primaryAlgorithmId, *secondaryAlgorithmIds',
+      algorithms: 'id, name, createdAt',
+    }).upgrade(async transaction => {
+      await transaction.table<Practice>('practices').toCollection().modify(practice => {
+        if (typeof practice.solutionMarkdown !== 'string') practice.solutionMarkdown = '';
+      });
+    });
   }
 }

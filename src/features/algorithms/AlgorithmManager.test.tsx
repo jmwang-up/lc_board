@@ -30,6 +30,7 @@ function fakeRepository(initialAlgorithms: Algorithm[] = [], practices: Practice
     async listAlgorithms() { return [...algorithms]; },
     async listPractices() { return practices; },
     async recordPractice() { throw new Error('not implemented'); },
+    async updatePracticeSolution() { throw new Error('not implemented'); },
     async listProblems() { return []; },
     async deletePractice() {},
     async deleteProblem() {},
@@ -78,8 +79,8 @@ it('renames a category inline', async () => {
 it('requires a distinct replacement and confirmation with the affected practice count before deletion', async () => {
   const algorithms = [algorithm('dp', '动态规划'), algorithm('graph', '图论')];
   const practices = [
-    { id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' },
-    { id: 'p2', problemId: 'two', practicedOn: '2026-07-12', primaryAlgorithmId: 'graph', secondaryAlgorithmIds: ['dp'], createdAt: '', updatedAt: '' },
+    { id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '', updatedAt: '' },
+    { id: 'p2', problemId: 'two', practicedOn: '2026-07-12', primaryAlgorithmId: 'graph', secondaryAlgorithmIds: ['dp'], solutionMarkdown: '', createdAt: '', updatedAt: '' },
   ];
   const repo = fakeRepository(algorithms, practices);
   renderManagerWithRepository(repo);
@@ -117,7 +118,7 @@ it('allows the last unused category to be explicitly confirmed and deleted', asy
 
 it('offers an explicitly confirmed cascade that names the exact affected practice count', async () => {
   const practices = [
-    { id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' },
+    { id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '', updatedAt: '' },
   ];
   const deleteAlgorithmAndPractices = vi.fn();
   const repo = fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')], practices);
@@ -134,7 +135,7 @@ it('offers an explicitly confirmed cascade that names the exact affected practic
 });
 
 it('keeps deletion failures accessible inside the modal', async () => {
-  const practices = [{ id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' }];
+  const practices = [{ id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '', updatedAt: '' }];
   const repo = fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')], practices);
   repo.deleteAlgorithmAndPractices = vi.fn().mockRejectedValue(new Error('数据已变化，请重新确认'));
   renderManagerWithRepository(repo);
@@ -157,7 +158,7 @@ it('closes the deletion dialog with Escape and restores focus', async () => {
 });
 
 it('focuses and contains keyboard navigation inside the deletion dialog', async () => {
-  const practices = [{ id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], createdAt: '', updatedAt: '' }];
+  const practices = [{ id: 'p1', problemId: 'one', practicedOn: '2026-07-12', primaryAlgorithmId: 'dp', secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: '', updatedAt: '' }];
   const { container } = renderManagerWithRepository(fakeRepository([algorithm('dp', '动态规划'), algorithm('graph', '图论')], practices));
   await userEvent.click(await screen.findByRole('button', { name: '删除动态规划' }));
   const dialog = screen.getByRole('dialog', { name: '删除动态规划' });

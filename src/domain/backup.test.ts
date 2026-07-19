@@ -5,10 +5,17 @@ import { mergeBackup, parseBackup, type BackupV1 } from './backup';
 const timestamp = '2026-07-12T00:00:00.000Z';
 const problem: Problem = { id: 'problem-local', leetcodeSlug: 'two-sum', frontendQuestionId: '1', titleZh: '两数之和', difficulty: 'easy', url: 'https://leetcode.cn/problems/two-sum/', createdAt: timestamp };
 const algorithm: Algorithm = { id: 'algorithm-local', name: '哈希表', color: '#16a34a', createdAt: timestamp };
-const practice: Practice = { id: 'practice-imported', problemId: problem.id, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [], createdAt: timestamp, updatedAt: timestamp };
+const practice: Practice = { id: 'practice-imported', problemId: problem.id, practicedOn: '2026-07-12', primaryAlgorithmId: algorithm.id, secondaryAlgorithmIds: [], solutionMarkdown: '', createdAt: timestamp, updatedAt: timestamp };
 const backup = (values: Partial<BackupV1> = {}): BackupV1 => ({ schemaVersion: 1, exportedAt: timestamp, problems: [], algorithms: [], practices: [], ...values });
 
 describe('parseBackup', () => {
+  it('rejects solution Markdown longer than 20,000 characters', () => {
+    expect(() => parseBackup(backup({
+      problems: [problem], algorithms: [algorithm],
+      practices: [{ ...practice, solutionMarkdown: 'x'.repeat(20_001) }],
+    }))).toThrow('备份数据格式无效');
+  });
+
   it('rejects a backup with a dangling practice reference', () => {
     expect(() => parseBackup(backup({ practices: [{ ...practice, problemId: 'missing' }] }))).toThrow('练习引用了不存在的题目');
   });

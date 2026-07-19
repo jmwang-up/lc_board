@@ -1,5 +1,7 @@
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
+export const SOLUTION_MARKDOWN_MAX_LENGTH = 20_000;
+
 export interface Problem {
   id: string;
   leetcodeSlug: string;
@@ -16,6 +18,7 @@ export interface Practice {
   practicedOn: string;
   primaryAlgorithmId: string;
   secondaryAlgorithmIds: string[];
+  solutionMarkdown: string;
   createdAt: string;
   updatedAt: string;
 }
