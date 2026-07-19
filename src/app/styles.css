@@ -135,6 +135,25 @@ input:not([type="checkbox"]):not([type="color"]), select { padding: .65rem; bord
 .dialog-panel fieldset label { display: inline-flex; margin-right: 1rem; }
 [role="alert"] { color: #8a1c1c; }
 
+.solution-editor { display: grid; gap: .75rem; }
+.solution-editor-tabs { display: flex; gap: .25rem; border-bottom: 1px solid #cdd2df; }
+.solution-editor-tabs [role="tab"] { padding: .55rem .85rem; color: #5c6475; background: transparent; border: 0; border-bottom: .2rem solid transparent; border-radius: .4rem .4rem 0 0; cursor: pointer; }
+.solution-editor-tabs [role="tab"][aria-selected="true"] { color: #5b48e8; border-bottom-color: currentColor; font-weight: 700; }
+.solution-editor textarea { display: block; width: 100%; min-height: 14rem; padding: .75rem; color: #172033; font: .9375rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; background: #fff; border: 1px solid #cdd2df; border-radius: .5rem; }
+.solution-editor-count { margin: 0; color: #5c6475; text-align: right; font-size: .875rem; }
+.solution-editor-preview { min-height: 14rem; padding: .75rem; background: #fff; border: 1px solid #cdd2df; border-radius: .5rem; }
+
+.markdown-content { overflow-wrap: anywhere; line-height: 1.65; }
+.markdown-content > :first-child { margin-top: 0; }
+.markdown-content > :last-child { margin-bottom: 0; }
+.markdown-content table { width: 100%; border-collapse: collapse; }
+.markdown-content th, .markdown-content td { padding: .55rem .7rem; text-align: left; border: 1px solid #cdd2df; }
+.markdown-content th { background: #f0f2f8; }
+.markdown-content blockquote { margin-inline: 0; padding-left: 1rem; color: #5c6475; border-left: .25rem solid #a9b0c2; }
+.markdown-content :not(pre) > code { padding: .1rem .35rem; background: #eef0f6; border-radius: .25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.markdown-content pre { max-width: 100%; overflow-x: auto; padding: .85rem; color: #eef0f6; background: #172033; border-radius: .5rem; }
+.markdown-content pre code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
 @media (max-width: 768px) {
   .app-shell > header {
     flex-wrap: wrap;
