@@ -6,7 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryProvider } from '../../app/RepositoryContext';
 import type { DashboardRepository } from '../../db/DashboardRepository';
 import { RecordPracticeDialog } from './RecordPracticeDialog';
-import { practiceFormSchema } from './PracticeForm';
+import { practiceFormSchema, type PracticeFormValues } from './PracticeForm';
+
+const fullDraft: PracticeFormValues = {
+  url: 'https://leetcode.cn/problems/two-sum/',
+  frontendQuestionId: '1',
+  titleZh: '两数之和',
+  difficulty: 'medium',
+  practicedOn: '2026-07-23',
+  primaryAlgorithmId: 'alg-1',
+  secondaryAlgorithmIds: ['alg-2'],
+  solutionMarkdown: '## 保留\n双指针',
+};
 
 function repository(algorithm = true): DashboardRepository {
   return {
@@ -24,7 +35,7 @@ function repository(algorithm = true): DashboardRepository {
 function renderDialog(repo: DashboardRepository) {
   const onClose = vi.fn();
   const onSaved = vi.fn();
-  const result = render(<><button type="button">背景操作</button><RepositoryProvider repository={repo}><MemoryRouter><RecordPracticeDialog open onClose={onClose} onSaved={onSaved} /></MemoryRouter></RepositoryProvider></>);
+  const result = render(<><button type="button">背景操作</button><RepositoryProvider repository={repo}><MemoryRouter><RecordPracticeDialog open onAddAlgorithm={vi.fn()} onClose={onClose} onSaved={onSaved} /></MemoryRouter></RepositoryProvider></>);
   return { ...result, onClose, onSaved };
 }
 
@@ -34,7 +45,7 @@ function LifecycleDialog({ repo, onSaved }: { repo: DashboardRepository; onSaved
     <button type="button" onClick={() => setOpen(true)}>打开记录</button>
     <RepositoryProvider repository={repo}>
       <MemoryRouter>
-        <RecordPracticeDialog open={open} onClose={() => setOpen(false)} onSaved={onSaved} />
+        <RecordPracticeDialog open={open} onAddAlgorithm={vi.fn()} onClose={() => setOpen(false)} onSaved={onSaved} />
       </MemoryRouter>
     </RepositoryProvider>
   </>;
@@ -51,6 +62,53 @@ async function fillManualPractice() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('RecordPracticeDialog', () => {
+  it('emits the current complete draft for each contextual add action', async () => {
+    const repo = repository();
+    vi.mocked(repo.listAlgorithms).mockResolvedValue([
+      { id: 'alg-1', name: '哈希表', color: '#fff', createdAt: '' },
+      { id: 'alg-2', name: '双指针', color: '#000', createdAt: '' },
+    ]);
+    const onAddAlgorithm = vi.fn();
+    render(<RepositoryProvider repository={repo}><MemoryRouter>
+      <RecordPracticeDialog open initialDraft={fullDraft} onAddAlgorithm={onAddAlgorithm} onClose={vi.fn()} onSaved={vi.fn()} />
+    </MemoryRouter></RepositoryProvider>);
+    expect(await screen.findByLabelText('中文题名')).toHaveValue('两数之和');
+
+    await userEvent.click(screen.getByRole('button', { name: '添加主要算法' }));
+    expect(onAddAlgorithm).toHaveBeenLastCalledWith('primary', fullDraft);
+    await userEvent.click(screen.getByRole('button', { name: '添加辅助算法' }));
+    expect(onAddAlgorithm).toHaveBeenLastCalledWith('secondary', fullDraft);
+  });
+
+  it('renders both add actions with no registered algorithms', async () => {
+    const repo = repository(false);
+    render(<RepositoryProvider repository={repo}><MemoryRouter>
+      <RecordPracticeDialog open initialDraft={{ ...fullDraft, primaryAlgorithmId: '', secondaryAlgorithmIds: [] }} onAddAlgorithm={vi.fn()} onClose={vi.fn()} onSaved={vi.fn()} />
+    </MemoryRouter></RepositoryProvider>);
+    expect(await screen.findByRole('button', { name: '添加主要算法' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '添加辅助算法' })).toBeEnabled();
+    expect(screen.getByLabelText('主要算法')).toHaveValue('');
+  });
+
+  it('restores every draft field and removes algorithm ids deleted while away', async () => {
+    const repo = repository();
+    vi.mocked(repo.listAlgorithms).mockResolvedValue([
+      { id: 'alg-2', name: '双指针', color: '#000', createdAt: '' },
+    ]);
+    render(<RepositoryProvider repository={repo}><MemoryRouter>
+      <RecordPracticeDialog open initialDraft={fullDraft} onAddAlgorithm={vi.fn()} onClose={vi.fn()} onSaved={vi.fn()} />
+    </MemoryRouter></RepositoryProvider>);
+
+    expect(await screen.findByLabelText('LeetCode 题目链接')).toHaveValue(fullDraft.url);
+    expect(screen.getByLabelText('题号')).toHaveValue('1');
+    expect(screen.getByLabelText('中文题名')).toHaveValue('两数之和');
+    expect(screen.getByLabelText('难度')).toHaveValue('medium');
+    expect(screen.getByLabelText('练习日期')).toHaveValue('2026-07-23');
+    expect(screen.getByLabelText('主要算法')).toHaveValue('');
+    expect(screen.getByRole('checkbox', { name: '双指针' })).toBeChecked();
+    expect(screen.getByRole('textbox', { name: '解题思路' })).toHaveValue('## 保留\n双指针');
+  });
+
   it('reopens with idle lookup state and ignores the closed session result', async () => {
     let resolveLookup!: (response: Response) => void;
     vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>(resolve => { resolveLookup = resolve; })));
@@ -245,10 +303,13 @@ describe('RecordPracticeDialog', () => {
     expect(screen.getByLabelText('解题思路')).toHaveValue('失败后仍需保留的思路');
   });
 
-  it('links to data management when no algorithms exist', async () => {
+  it('shows contextual add actions after manually opening a form with no algorithms', async () => {
     renderDialog(repository(false));
-    expect(await screen.findByRole('link', { name: '前往数据管理创建算法分类' })).toHaveAttribute('href', '/data');
-    expect(screen.queryByLabelText('主要算法')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('LeetCode 题目链接'), 'https://leetcode.cn/problems/two-sum/');
+    await userEvent.click(screen.getByRole('button', { name: '手动填写' }));
+    expect(await screen.findByRole('button', { name: '添加主要算法' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '添加辅助算法' })).toBeEnabled();
+    expect(screen.queryByRole('link', { name: '前往数据管理创建算法分类' })).not.toBeInTheDocument();
   });
 
   it('replaces form metadata when a second URL is looked up', async () => {
