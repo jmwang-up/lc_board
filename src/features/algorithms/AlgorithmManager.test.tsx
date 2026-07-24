@@ -1,4 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { RepositoryProvider } from '../../app/RepositoryContext';
@@ -41,8 +42,11 @@ function fakeRepository(initialAlgorithms: Algorithm[] = [], practices: Practice
   };
 }
 
-function renderManagerWithRepository(repository: DashboardRepository) {
-  return render(<RepositoryProvider repository={repository}><AlgorithmManager /></RepositoryProvider>);
+function renderManagerWithRepository(
+  repository: DashboardRepository,
+  props: ComponentProps<typeof AlgorithmManager> = {},
+) {
+  return render(<RepositoryProvider repository={repository}><AlgorithmManager {...props} /></RepositoryProvider>);
 }
 
 const algorithm = (id: string, name: string): Algorithm => ({ id, name, color: '#2563eb', createdAt: '2026-07-12T00:00:00.000Z' });
@@ -55,6 +59,45 @@ it('creates a category and rejects a duplicate normalized name', async () => {
   await userEvent.type(screen.getByLabelText('算法名称'), ' 动态规划 ');
   await userEvent.click(screen.getByRole('button', { name: '创建分类' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('算法名称已存在');
+});
+
+it('focuses contextual creation and reports the exact created algorithm once', async () => {
+  const created = { id: 'graph', name: '图论', color: '#2563eb', createdAt: '' };
+  const createAlgorithm = vi.fn().mockResolvedValue(created);
+  const onAlgorithmCreated = vi.fn();
+  const repo = fakeRepository([]);
+  repo.createAlgorithm = createAlgorithm;
+  renderManagerWithRepository(repo, {
+    creationTarget: 'secondary',
+    onAlgorithmCreated,
+    onReturnToPractice: vi.fn(),
+  });
+
+  expect(screen.getByRole('status')).toHaveTextContent('正在为本次练习添加辅助算法');
+  expect(screen.getByLabelText('算法名称')).toHaveFocus();
+  await userEvent.type(screen.getByLabelText('算法名称'), '图论');
+  const form = screen.getByRole('button', { name: '创建分类' }).closest('form')!;
+  fireEvent.submit(form);
+  fireEvent.submit(form);
+
+  await waitFor(() => expect(createAlgorithm).toHaveBeenCalledTimes(1));
+  expect(onAlgorithmCreated).toHaveBeenCalledWith(created);
+});
+
+it('stays in creation mode on duplicate or repository failure', async () => {
+  const onAlgorithmCreated = vi.fn();
+  const repo = fakeRepository([]);
+  repo.createAlgorithm = vi.fn().mockRejectedValue(new Error('算法名称已存在'));
+  renderManagerWithRepository(repo, {
+    creationTarget: 'primary',
+    onAlgorithmCreated,
+    onReturnToPractice: vi.fn(),
+  });
+  await userEvent.type(screen.getByLabelText('算法名称'), '哈希表');
+  await userEvent.click(screen.getByRole('button', { name: '创建分类' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('算法名称已存在');
+  expect(onAlgorithmCreated).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: '返回记录练习' })).toBeVisible();
 });
 
 it('shows a localized actionable error when algorithms cannot be loaded', async () => {

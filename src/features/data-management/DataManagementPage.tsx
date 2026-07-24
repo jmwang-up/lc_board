@@ -1,7 +1,9 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useRepository } from '../../app/RepositoryContext';
 import { parseBackup } from '../../domain/backup';
+import type { Algorithm } from '../../domain/models';
 import { AlgorithmManager } from '../algorithms/AlgorithmManager';
+import type { AlgorithmTarget } from '../practices/practiceSession';
 import { Modal } from '../../shared/ui/Modal';
 
 const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
@@ -15,7 +17,17 @@ function localDateStamp(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function DataManagementPage() {
+interface DataManagementPageProps {
+  creationTarget?: AlgorithmTarget;
+  onAlgorithmCreated?: (algorithm: Algorithm) => void;
+  onReturnToPractice?: () => void;
+}
+
+export function DataManagementPage({
+  creationTarget,
+  onAlgorithmCreated,
+  onReturnToPractice,
+}: DataManagementPageProps = {}) {
   const repository = useRepository();
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -97,7 +109,12 @@ export function DataManagementPage() {
   }
 
   return <>
-    <AlgorithmManager reloadVersion={algorithmReloadVersion} />
+    <AlgorithmManager
+      reloadVersion={algorithmReloadVersion}
+      creationTarget={creationTarget}
+      onAlgorithmCreated={onAlgorithmCreated}
+      onReturnToPractice={onReturnToPractice}
+    />
     <section aria-labelledby="backup-heading">
       <h2 id="backup-heading">备份与恢复</h2>
       <button type="button" onClick={() => void exportData()}>导出数据</button>

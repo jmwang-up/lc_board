@@ -23,6 +23,19 @@ function repository(overrides: Partial<DashboardRepository> = {}): DashboardRepo
 
 const renderPage = (repo: DashboardRepository) => render(<RepositoryProvider repository={repo}><DataManagementPage /></RepositoryProvider>);
 
+it('shows practice creation mode only when explicitly requested', async () => {
+  const { rerender } = render(<RepositoryProvider repository={repository()}>
+    <DataManagementPage />
+  </RepositoryProvider>);
+  expect(screen.queryByRole('button', { name: '返回记录练习' })).not.toBeInTheDocument();
+
+  rerender(<RepositoryProvider repository={repository()}>
+    <DataManagementPage creationTarget="primary" onAlgorithmCreated={vi.fn()} onReturnToPractice={vi.fn()} />
+  </RepositoryProvider>);
+  expect(await screen.findByRole('button', { name: '返回记录练习' })).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent('正在为本次练习添加主要算法');
+});
+
 it('downloads export using the dated JSON filename', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-07-12T08:00:00.000Z'));
