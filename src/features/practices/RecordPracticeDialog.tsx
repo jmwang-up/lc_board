@@ -123,11 +123,17 @@ export function RecordPracticeDialog({ open, initialDraft, onClose, onSaved, onA
   const restoredValues = initialDraft
     ? sanitizeDraftAlgorithms(initialDraft, algorithms)
     : {
-        url,
         frontendQuestionId: metadata?.frontendQuestionId ?? '',
         titleZh: metadata?.titleZh ?? '',
         difficulty: metadata?.difficulty ?? 'easy',
       };
+  const formValues = {
+    ...restoredValues,
+    url,
+    frontendQuestionId: metadata?.frontendQuestionId ?? restoredValues.frontendQuestionId,
+    titleZh: metadata?.titleZh ?? restoredValues.titleZh,
+    difficulty: metadata?.difficulty ?? restoredValues.difficulty,
+  };
 
   return <Modal ariaLabelledBy="record-practice-title" initialFocusRef={urlInput} onClose={onClose}>
     <h2 id="record-practice-title">记录练习</h2>
@@ -137,6 +143,6 @@ export function RecordPracticeDialog({ open, initialDraft, onClose, onSaved, onA
     <button type="button" onClick={() => { invalidateLookup(); setLookingUp(false); try { const parsed = parseLeetCodeCnUrl(url); setUrl(parsed.url); setMetadata(undefined); setLookupError(''); setManual(true); } catch (error) { setLookupError(error instanceof Error ? error.message : '链接无效'); } }}>手动填写</button>
     {lookupError && <p role="alert">{lookupError}</p>}
     {loadError && <p role="alert">{loadError}</p>}
-    {!loading && !loadError && manual && <PracticeForm algorithms={algorithms} values={restoredValues} saving={saving} saveError={saveError} onSubmit={save} onAddAlgorithm={onAddAlgorithm} />}
+    {!loading && !loadError && manual && <PracticeForm algorithms={algorithms} values={formValues} saving={saving} saveError={saveError} onSubmit={save} onAddAlgorithm={onAddAlgorithm} />}
   </Modal>;
 }

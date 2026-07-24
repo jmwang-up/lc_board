@@ -80,6 +80,28 @@ describe('RecordPracticeDialog', () => {
     expect(onAddAlgorithm).toHaveBeenLastCalledWith('secondary', fullDraft);
   });
 
+  it('emits the edited URL when adding an algorithm from a restored draft', async () => {
+    const repo = repository();
+    vi.mocked(repo.listAlgorithms).mockResolvedValue([
+      { id: 'alg-1', name: '哈希表', color: '#fff', createdAt: '' },
+      { id: 'alg-2', name: '双指针', color: '#000', createdAt: '' },
+    ]);
+    const onAddAlgorithm = vi.fn();
+    render(<RepositoryProvider repository={repo}><MemoryRouter>
+      <RecordPracticeDialog open initialDraft={fullDraft} onAddAlgorithm={onAddAlgorithm} onClose={vi.fn()} onSaved={vi.fn()} />
+    </MemoryRouter></RepositoryProvider>);
+
+    const url = await screen.findByLabelText('LeetCode 题目链接');
+    await userEvent.clear(url);
+    await userEvent.type(url, 'https://leetcode.cn/problems/add-two-numbers/');
+    await userEvent.click(screen.getByRole('button', { name: '添加主要算法' }));
+
+    expect(onAddAlgorithm).toHaveBeenLastCalledWith('primary', {
+      ...fullDraft,
+      url: 'https://leetcode.cn/problems/add-two-numbers/',
+    });
+  });
+
   it('renders both add actions with no registered algorithms', async () => {
     const repo = repository(false);
     render(<RepositoryProvider repository={repo}><MemoryRouter>

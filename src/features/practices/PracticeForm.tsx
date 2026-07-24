@@ -33,13 +33,16 @@ interface PracticeFormProps {
 }
 
 export function PracticeForm({ algorithms, values, saving, saveError, onSubmit, onAddAlgorithm }: PracticeFormProps) {
-  const { register, handleSubmit, reset, control, watch, getValues, formState: { errors } } = useForm<PracticeFormValues>({
+  const { register, handleSubmit, reset, setValue, control, watch, getValues, formState: { errors } } = useForm<PracticeFormValues>({
     resolver: zodResolver(practiceFormSchema),
     defaultValues: { difficulty: 'easy', practicedOn: localToday(), secondaryAlgorithmIds: [], solutionMarkdown: '', primaryAlgorithmId: '', ...values },
   });
   useEffect(() => {
     reset({ difficulty: 'easy', practicedOn: localToday(), secondaryAlgorithmIds: [], solutionMarkdown: '', primaryAlgorithmId: '', ...values });
-  }, [reset, values.url, values.frontendQuestionId, values.titleZh, values.difficulty, values.solutionMarkdown]);
+  }, [reset, values.frontendQuestionId, values.titleZh, values.difficulty, values.solutionMarkdown]);
+  useEffect(() => {
+    setValue('url', values.url ?? '');
+  }, [setValue, values.url]);
   const error = Object.entries(errors).find(([name]) => name !== 'solutionMarkdown')?.[1]?.message;
   const solutionTooLong = (watch('solutionMarkdown') ?? '').length > SOLUTION_MARKDOWN_MAX_LENGTH;
   return <form onSubmit={handleSubmit(onSubmit)}>
