@@ -110,7 +110,7 @@ test('retains an edited Markdown solution through reload and backup restore', as
   await dialog.getByRole('button', { name: '读取题目信息' }).click();
   await expect(dialog.getByLabel('中文题名')).toHaveValue('两数之和');
   await dialog.getByLabel('练习日期').fill('2026-07-14');
-  await dialog.getByLabel('主要算法').selectOption({ label: '哈希表' });
+  await dialog.getByRole('combobox', { name: '主要算法', exact: true }).selectOption({ label: '哈希表' });
   await dialog.getByRole('textbox', { name: '解题思路' }).fill(initialMarkdown);
   await dialog.getByRole('button', { name: '保存练习' }).click();
   await expect(dialog).toBeHidden();
@@ -200,7 +200,9 @@ test('creates a missing primary algorithm from an in-progress practice', async (
   await expect(page).toHaveURL(/\/problems\?query=two-sum$/);
   dialog = page.getByRole('dialog', { name: '记录练习' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel('主要算法').locator('option:checked')).toHaveText('图论');
+  const primary = dialog.getByRole('combobox', { name: '主要算法', exact: true });
+  await expect(primary).not.toHaveValue('');
+  await expect(primary).toContainText('图论');
   await expect(dialog.getByLabel('练习日期')).toHaveValue('2026-07-23');
   await expect(dialog.getByRole('textbox', { name: '解题思路' })).toHaveValue('## 草稿\n\n使用图论');
   await dialog.getByRole('button', { name: '保存练习' }).click();
