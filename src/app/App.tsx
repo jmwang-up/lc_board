@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import type { Algorithm } from '../domain/models';
 import { DataManagementPage } from '../features/data-management/DataManagementPage';
@@ -33,6 +33,18 @@ export function App() {
     algorithmRequestRef.current = request;
     setAlgorithmRequest(request);
   }, []);
+
+  const handleNavigationIntent = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
+    const target = event.currentTarget.getAttribute('target');
+    if (event.defaultPrevented
+      || event.button !== 0
+      || event.metaKey
+      || event.altKey
+      || event.ctrlKey
+      || event.shiftKey
+      || (target && target !== '_self')) return;
+    replaceAlgorithmRequest(undefined);
+  }, [replaceAlgorithmRequest]);
 
   function isCurrentAlgorithmRequest(request: ActiveAlgorithmRequest) {
     return algorithmRequestRef.current === request
@@ -93,9 +105,9 @@ export function App() {
     <header>
       <strong>LC Board</strong>
       <nav aria-label="主导航">
-        <NavLink to="/" onClick={() => replaceAlgorithmRequest(undefined)}>算法看板</NavLink>
-        <NavLink to="/problems" onClick={() => replaceAlgorithmRequest(undefined)}>题目记录</NavLink>
-        <NavLink to="/data" onClick={() => replaceAlgorithmRequest(undefined)}>数据管理</NavLink>
+        <NavLink to="/" onClick={handleNavigationIntent}>算法看板</NavLink>
+        <NavLink to="/problems" onClick={handleNavigationIntent}>题目记录</NavLink>
+        <NavLink to="/data" onClick={handleNavigationIntent}>数据管理</NavLink>
       </nav>
       <button ref={recordButton} data-testid="record-practice" type="button" onClick={() => {
         setPracticeDraft(undefined);

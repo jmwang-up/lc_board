@@ -262,6 +262,25 @@ it('revokes a pending BrowserRouter callback synchronously with main navigation 
   expect(screen.queryByText(/正在为本次练习添加/)).not.toBeInTheDocument();
 });
 
+it('keeps the active request when a modified navigation click stays in the current tab', async () => {
+  renderApp('/');
+  await userEvent.click(screen.getByTestId('record-practice'));
+  await fillManualDraft('保留草稿');
+  await userEvent.click(screen.getByRole('button', { name: '添加主要算法' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('/data?createAlgorithm=1');
+
+  fireEvent.click(screen.getByRole('link', { name: '数据管理' }), {
+    button: 0,
+    ctrlKey: true,
+  });
+
+  expect(screen.getByTestId('location')).toHaveTextContent('/data?createAlgorithm=1');
+  expect(screen.getByText('正在为本次练习添加主要算法')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: '返回记录练习' }));
+  const restored = within(await screen.findByRole('dialog', { name: '记录练习' }));
+  expect(restored.getByRole('textbox', { name: '解题思路' })).toHaveValue('保留草稿');
+});
+
 it('isolates a new algorithm request from the pending manager state of the previous request', async () => {
   const firstCreate = deferred<Algorithm>();
   const secondAlgorithm = { id: 'new', name: '新算法', color: '#2563eb', createdAt: '' };
