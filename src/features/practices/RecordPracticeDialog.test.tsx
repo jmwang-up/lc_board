@@ -109,6 +109,28 @@ describe('RecordPracticeDialog', () => {
     expect(screen.getByRole('textbox', { name: '解题思路' })).toHaveValue('## 保留\n双指针');
   });
 
+  it('restores an unvalidated draft with an invalid URL', async () => {
+    const repo = repository();
+    render(<RepositoryProvider repository={repo}><MemoryRouter>
+      <RecordPracticeDialog open initialDraft={{ ...fullDraft, url: '' }} onAddAlgorithm={vi.fn()} onClose={vi.fn()} onSaved={vi.fn()} />
+    </MemoryRouter></RepositoryProvider>);
+
+    expect(await screen.findByLabelText('LeetCode 题目链接')).toHaveValue('');
+    expect(screen.getByLabelText('中文题名')).toHaveValue('两数之和');
+    expect(screen.getByRole('button', { name: '添加主要算法' })).toBeEnabled();
+  });
+
+  it('restores an unvalidated draft with a partial URL', async () => {
+    const repo = repository();
+    render(<RepositoryProvider repository={repo}><MemoryRouter>
+      <RecordPracticeDialog open initialDraft={{ ...fullDraft, url: 'https://leetcode.cn/problems/' }} onAddAlgorithm={vi.fn()} onClose={vi.fn()} onSaved={vi.fn()} />
+    </MemoryRouter></RepositoryProvider>);
+
+    expect(await screen.findByLabelText('LeetCode 题目链接')).toHaveValue('https://leetcode.cn/problems/');
+    expect(screen.getByLabelText('中文题名')).toHaveValue('两数之和');
+    expect(screen.getByRole('button', { name: '添加主要算法' })).toBeEnabled();
+  });
+
   it('reopens with idle lookup state and ignores the closed session result', async () => {
     let resolveLookup!: (response: Response) => void;
     vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>(resolve => { resolveLookup = resolve; })));

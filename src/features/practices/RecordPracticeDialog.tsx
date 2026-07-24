@@ -71,12 +71,7 @@ export function RecordPracticeDialog({ open, initialDraft, onClose, onSaved, onA
   useEffect(() => {
     if (!open || !initialDraft) return;
     setUrl(initialDraft.url);
-    setMetadata({
-      ...parseLeetCodeCnUrl(initialDraft.url),
-      frontendQuestionId: initialDraft.frontendQuestionId,
-      titleZh: initialDraft.titleZh,
-      difficulty: initialDraft.difficulty,
-    });
+    setMetadata(undefined);
     setManual(true);
   }, [open, initialDraft]);
   useEffect(() => { if (open) void reload(); }, [open, reload]);
