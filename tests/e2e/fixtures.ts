@@ -14,7 +14,7 @@ export async function recordProblem(page: Page, input: { url: string; title: str
   await dialog.getByRole('button', { name: '读取题目信息' }).click();
   await expect(dialog.getByLabel('中文题名')).toHaveValue(input.title);
   await dialog.getByLabel('练习日期').fill(input.date);
-  await dialog.getByLabel('主要算法').selectOption({ label: input.primary });
+  await dialog.getByRole('combobox', { name: '主要算法', exact: true }).selectOption({ label: input.primary });
   for (const name of input.secondary ?? []) await dialog.getByRole('checkbox', { name }).check();
   await dialog.getByRole('button', { name: '保存练习' }).click();
   await expect(dialog).toBeHidden();

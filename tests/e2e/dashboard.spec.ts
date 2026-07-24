@@ -110,7 +110,7 @@ test('retains an edited Markdown solution through reload and backup restore', as
   await dialog.getByRole('button', { name: '读取题目信息' }).click();
   await expect(dialog.getByLabel('中文题名')).toHaveValue('两数之和');
   await dialog.getByLabel('练习日期').fill('2026-07-14');
-  await dialog.getByLabel('主要算法').selectOption({ label: '哈希表' });
+  await dialog.getByRole('combobox', { name: '主要算法', exact: true }).selectOption({ label: '哈希表' });
   await dialog.getByRole('textbox', { name: '解题思路' }).fill(initialMarkdown);
   await dialog.getByRole('button', { name: '保存练习' }).click();
   await expect(dialog).toBeHidden();
@@ -178,4 +178,40 @@ test('opens exact-date history from the calendar and confirms practice and probl
   await dialog.getByRole('checkbox', { name: '我确认删除两数之和及 1 条练习' }).check();
   await dialog.getByRole('button', { name: '确认删除题目及 1 条练习' }).click();
   await expect(page.getByRole('heading', { name: '没有匹配的题目' })).toBeVisible();
+});
+
+test('creates a missing primary algorithm from an in-progress practice', async ({ page }) => {
+  await page.goto('/problems?query=two-sum');
+  await page.getByTestId('record-practice').click();
+  let dialog = page.getByRole('dialog', { name: '记录练习' });
+  await dialog.getByLabel('LeetCode 题目链接').fill('https://leetcode.cn/problems/two-sum/');
+  await dialog.getByRole('button', { name: '读取题目信息' }).click();
+  await expect(dialog.getByLabel('中文题名')).toHaveValue('两数之和');
+  await dialog.getByLabel('练习日期').fill('2026-07-23');
+  await dialog.getByRole('textbox', { name: '解题思路' }).fill('## 草稿\n\n使用图论');
+  await dialog.getByRole('button', { name: '添加主要算法' }).click();
+
+  await expect(page).toHaveURL(/\/data\?createAlgorithm=1$/);
+  await expect(page.getByRole('status')).toHaveText('正在为本次练习添加主要算法');
+  await expect(page.getByLabel('算法名称')).toBeFocused();
+  await page.getByLabel('算法名称').fill('图论');
+  await page.getByRole('button', { name: '创建分类' }).click();
+
+  await expect(page).toHaveURL(/\/problems\?query=two-sum$/);
+  dialog = page.getByRole('dialog', { name: '记录练习' });
+  await expect(dialog).toBeVisible();
+  const primary = dialog.getByRole('combobox', { name: '主要算法', exact: true });
+  await expect(primary).not.toHaveValue('');
+  await expect(primary).toContainText('图论');
+  await expect(dialog.getByLabel('练习日期')).toHaveValue('2026-07-23');
+  await expect(dialog.getByRole('textbox', { name: '解题思路' })).toHaveValue('## 草稿\n\n使用图论');
+  await dialog.getByRole('button', { name: '保存练习' }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('link', { name: '题目记录', exact: true }).click();
+  const row = page.getByRole('row').filter({ has: page.getByRole('heading', { name: '两数之和' }) });
+  await row.getByRole('button', { name: '查看练习记录' }).click();
+  const practice = row.getByTestId('practice-history').getByRole('listitem').filter({ hasText: '2026-07-23' });
+  await expect(practice.getByText('主：图论', { exact: true })).toBeVisible();
+  await expect(practice.getByRole('heading', { name: '草稿' })).toBeVisible();
 });

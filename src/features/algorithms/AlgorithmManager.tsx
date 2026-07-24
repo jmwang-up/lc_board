@@ -1,17 +1,31 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRepository } from '../../app/RepositoryContext';
 import type { Algorithm } from '../../domain/models';
 import { Modal } from '../../shared/ui/Modal';
+import type { AlgorithmTarget } from '../practices/practiceSession';
 import { useAlgorithms } from './useAlgorithms';
 
 const messageFor = (cause: unknown, fallback: string) => cause instanceof Error ? cause.message : fallback;
 
-export function AlgorithmManager({ reloadVersion = 0 }: { reloadVersion?: number } = {}) {
+interface AlgorithmManagerProps {
+  reloadVersion?: number;
+  creationTarget?: AlgorithmTarget;
+  onAlgorithmCreated?: (algorithm: Algorithm) => void;
+  onReturnToPractice?: () => void;
+}
+
+export function AlgorithmManager({
+  reloadVersion = 0,
+  creationTarget,
+  onAlgorithmCreated,
+  onReturnToPractice,
+}: AlgorithmManagerProps = {}) {
   const repository = useRepository();
   const { algorithms, reload, loading, loadError } = useAlgorithms(reloadVersion);
   const [name, setName] = useState('');
   const [color, setColor] = useState('#2563eb');
   const [error, setError] = useState('');
+  const [createPending, setCreatePending] = useState(false);
   const [renaming, setRenaming] = useState<Algorithm | null>(null);
   const [renameName, setRenameName] = useState('');
   const [deleting, setDeleting] = useState<Algorithm | null>(null);
@@ -23,21 +37,37 @@ export function AlgorithmManager({ reloadVersion = 0 }: { reloadVersion?: number
   const [deletePending, setDeletePending] = useState(false);
   const deleteTrigger = useRef<HTMLButtonElement | null>(null);
   const replacementSelect = useRef<HTMLSelectElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const createOperation = useRef<object | undefined>(undefined);
+
+  useEffect(() => {
+    if (creationTarget) nameInput.current?.focus();
+  }, [creationTarget]);
 
   function closeDelete() {
     setDeleting(null);
   }
 
-  async function create(event: FormEvent) {
+  function create(event: FormEvent) {
     event.preventDefault();
-    setError('');
-    try {
-      await repository.createAlgorithm({ name, color });
-      setName('');
-      await reload();
-    } catch (cause) {
-      setError(messageFor(cause, '创建算法失败'));
-    }
+    if (createOperation.current) return;
+    const operation = {};
+    createOperation.current = operation;
+    void (async () => {
+      setError('');
+      setCreatePending(true);
+      try {
+        const algorithm = await repository.createAlgorithm({ name, color });
+        setName('');
+        await reload();
+        onAlgorithmCreated?.(algorithm);
+      } catch (cause) {
+        setError(messageFor(cause, '创建算法失败'));
+      } finally {
+        setCreatePending(false);
+        if (createOperation.current === operation) createOperation.current = undefined;
+      }
+    })();
   }
 
   function beginRename(algorithm: Algorithm) {
@@ -111,10 +141,14 @@ export function AlgorithmManager({ reloadVersion = 0 }: { reloadVersion?: number
     <section aria-labelledby="algorithm-heading">
       <h1 id="algorithm-heading">数据管理</h1>
       <h2>算法分类</h2>
+      {creationTarget && <section className="practice-return-banner" aria-label="练习算法创建流程">
+        <p role="status">正在为本次练习添加{creationTarget === 'primary' ? '主要算法' : '辅助算法'}</p>
+        <button type="button" onClick={onReturnToPractice}>返回记录练习</button>
+      </section>}
       <form onSubmit={create}>
-        <label>算法名称<input value={name} onChange={event => setName(event.target.value)} /></label>
+        <label>算法名称<input ref={nameInput} value={name} onChange={event => setName(event.target.value)} /></label>
         <label>分类颜色<input aria-label="分类颜色" type="color" value={color} onChange={event => setColor(event.target.value)} /></label>
-        <button disabled={loading || !name.trim()}>创建分类</button>
+        <button disabled={loading || createPending || !name.trim()}>{createPending ? '创建中…' : '创建分类'}</button>
       </form>
       {error && <p role="alert">{error}</p>}
       {loadError && <p role="alert">{loadError}</p>}
