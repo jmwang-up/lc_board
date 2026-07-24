@@ -31,7 +31,7 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname}{location.search}{location.hash}</output>;
 }
 
-function createAppRepository() {
+function createAppRepository(createAlgorithmOverride?: DashboardRepository['createAlgorithm']) {
   let algorithms: Algorithm[] = [
     { id: 'hash', name: '哈希表', color: '#2563eb', createdAt: '' },
     { id: 'binary', name: '二分查找', color: '#16a34a', createdAt: '' },
@@ -42,6 +42,7 @@ function createAppRepository() {
     recordPractice,
     async listAlgorithms() { return [...algorithms]; },
     async createAlgorithm(input) {
+      if (createAlgorithmOverride) return createAlgorithmOverride(input);
       const algorithm = { id: `created-${algorithms.length}`, ...input, createdAt: '' };
       algorithms = [...algorithms, algorithm];
       return algorithm;
@@ -50,8 +51,11 @@ function createAppRepository() {
   return { repo, recordPractice };
 }
 
-function renderApp(initialEntry = '/') {
-  const state = createAppRepository();
+function renderApp(
+  initialEntry = '/',
+  createAlgorithmOverride?: DashboardRepository['createAlgorithm'],
+) {
+  const state = createAppRepository(createAlgorithmOverride);
   render(<RepositoryProvider repository={state.repo}>
     <MemoryRouter initialEntries={[initialEntry]}>
       <App />
@@ -157,4 +161,52 @@ it('treats a refreshed creation URL without memory state as ordinary data manage
   expect(screen.getByRole('heading', { name: '数据管理' })).toBeVisible();
   expect(screen.queryByRole('button', { name: '返回记录练习' })).not.toBeInTheDocument();
   expect(screen.queryByText(/正在为本次练习添加/)).not.toBeInTheDocument();
+});
+
+it('invalidates creation mode after navigating from the exact creation URL to ordinary data management', async () => {
+  renderApp('/');
+  await userEvent.click(screen.getByTestId('record-practice'));
+  await fillManualDraft();
+  await userEvent.click(screen.getByRole('button', { name: '添加主要算法' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('/data?createAlgorithm=1');
+
+  await userEvent.click(screen.getByRole('link', { name: '数据管理' }));
+
+  expect(screen.getByTestId('location')).toHaveTextContent('/data');
+  expect(screen.queryByRole('button', { name: '返回记录练习' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/正在为本次练习添加/)).not.toBeInTheDocument();
+
+  await userEvent.type(screen.getByLabelText('算法名称'), '图论');
+  await userEvent.click(screen.getByRole('button', { name: '创建分类' }));
+
+  expect(await screen.findByText('图论')).toBeVisible();
+  expect(screen.getByTestId('location')).toHaveTextContent('/data');
+  expect(screen.queryByRole('dialog', { name: '记录练习' })).not.toBeInTheDocument();
+});
+
+it('ignores a pending create completion after starting a fresh practice session', async () => {
+  let resolveCreate!: (algorithm: Algorithm) => void;
+  const createPromise = new Promise<Algorithm>(resolve => {
+    resolveCreate = resolve;
+  });
+  const createAlgorithm = vi.fn().mockReturnValue(createPromise);
+  renderApp('/', createAlgorithm);
+  await userEvent.click(screen.getByTestId('record-practice'));
+  await fillManualDraft('旧草稿');
+  await userEvent.click(screen.getByRole('button', { name: '添加主要算法' }));
+  await userEvent.type(screen.getByLabelText('算法名称'), '图论');
+  await userEvent.click(screen.getByRole('button', { name: '创建分类' }));
+  await waitFor(() => expect(createAlgorithm).toHaveBeenCalledOnce());
+
+  await userEvent.click(screen.getByTestId('record-practice'));
+  const freshDialog = within(screen.getByRole('dialog', { name: '记录练习' }));
+  expect(freshDialog.getByLabelText('LeetCode 题目链接')).toHaveValue('');
+
+  resolveCreate({ id: 'graph', name: '图论', color: '#2563eb', createdAt: '' });
+  await waitFor(() => expect(screen.queryByText('创建中…')).not.toBeInTheDocument());
+
+  expect(screen.getByTestId('location')).toHaveTextContent('/data?createAlgorithm=1');
+  expect(screen.getByRole('dialog', { name: '记录练习' })).toBeVisible();
+  expect(freshDialog.getByLabelText('LeetCode 题目链接')).toHaveValue('');
+  expect(freshDialog.queryByRole('textbox', { name: '解题思路' })).not.toBeInTheDocument();
 });
