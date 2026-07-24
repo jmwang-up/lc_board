@@ -18,12 +18,14 @@ function localDateStamp(date: Date): string {
 }
 
 interface DataManagementPageProps {
+  creationRequestId?: number;
   creationTarget?: AlgorithmTarget;
   onAlgorithmCreated?: (algorithm: Algorithm) => void;
   onReturnToPractice?: () => void;
 }
 
 export function DataManagementPage({
+  creationRequestId,
   creationTarget,
   onAlgorithmCreated,
   onReturnToPractice,
@@ -110,6 +112,7 @@ export function DataManagementPage({
 
   return <>
     <AlgorithmManager
+      key={creationRequestId === undefined ? 'ordinary' : `practice-${creationRequestId}`}
       reloadVersion={algorithmReloadVersion}
       creationTarget={creationTarget}
       onAlgorithmCreated={onAlgorithmCreated}

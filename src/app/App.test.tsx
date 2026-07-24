@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, useLocation } from 'react-router-dom';
 import { vi } from 'vitest';
 import type { DashboardRepository } from '../db/DashboardRepository';
 import type { Algorithm } from '../domain/models';
@@ -31,6 +31,20 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname}{location.search}{location.hash}</output>;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (cause: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushMicrotasks(count = 10) {
+  for (let index = 0; index < count; index += 1) await Promise.resolve();
+}
+
 function createAppRepository(createAlgorithmOverride?: DashboardRepository['createAlgorithm']) {
   let algorithms: Algorithm[] = [
     { id: 'hash', name: '哈希表', color: '#2563eb', createdAt: '' },
@@ -42,8 +56,9 @@ function createAppRepository(createAlgorithmOverride?: DashboardRepository['crea
     recordPractice,
     async listAlgorithms() { return [...algorithms]; },
     async createAlgorithm(input) {
-      if (createAlgorithmOverride) return createAlgorithmOverride(input);
-      const algorithm = { id: `created-${algorithms.length}`, ...input, createdAt: '' };
+      const algorithm = createAlgorithmOverride
+        ? await createAlgorithmOverride(input)
+        : { id: `created-${algorithms.length}`, ...input, createdAt: '' };
       algorithms = [...algorithms, algorithm];
       return algorithm;
     },
@@ -61,6 +76,21 @@ function renderApp(
       <App />
       <LocationProbe />
     </MemoryRouter>
+  </RepositoryProvider>);
+  return state;
+}
+
+function renderBrowserApp(
+  initialEntry = '/',
+  createAlgorithmOverride?: DashboardRepository['createAlgorithm'],
+) {
+  window.history.replaceState({}, '', initialEntry);
+  const state = createAppRepository(createAlgorithmOverride);
+  render(<RepositoryProvider repository={state.repo}>
+    <BrowserRouter>
+      <App />
+      <LocationProbe />
+    </BrowserRouter>
   </RepositoryProvider>);
   return state;
 }
@@ -185,11 +215,8 @@ it('invalidates creation mode after navigating from the exact creation URL to or
 });
 
 it('ignores a pending create completion after starting a fresh practice session', async () => {
-  let resolveCreate!: (algorithm: Algorithm) => void;
-  const createPromise = new Promise<Algorithm>(resolve => {
-    resolveCreate = resolve;
-  });
-  const createAlgorithm = vi.fn().mockReturnValue(createPromise);
+  const create = deferred<Algorithm>();
+  const createAlgorithm = vi.fn().mockReturnValue(create.promise);
   renderApp('/', createAlgorithm);
   await userEvent.click(screen.getByTestId('record-practice'));
   await fillManualDraft('旧草稿');
@@ -202,11 +229,74 @@ it('ignores a pending create completion after starting a fresh practice session'
   const freshDialog = within(screen.getByRole('dialog', { name: '记录练习' }));
   expect(freshDialog.getByLabelText('LeetCode 题目链接')).toHaveValue('');
 
-  resolveCreate({ id: 'graph', name: '图论', color: '#2563eb', createdAt: '' });
+  create.resolve({ id: 'graph', name: '图论', color: '#2563eb', createdAt: '' });
   await waitFor(() => expect(screen.queryByText('创建中…')).not.toBeInTheDocument());
 
   expect(screen.getByTestId('location')).toHaveTextContent('/data?createAlgorithm=1');
   expect(screen.getByRole('dialog', { name: '记录练习' })).toBeVisible();
   expect(freshDialog.getByLabelText('LeetCode 题目链接')).toHaveValue('');
   expect(freshDialog.queryByRole('textbox', { name: '解题思路' })).not.toBeInTheDocument();
+});
+
+it('revokes a pending BrowserRouter callback synchronously with main navigation intent', async () => {
+  const create = deferred<Algorithm>();
+  const createAlgorithm = vi.fn().mockReturnValue(create.promise);
+  renderBrowserApp('/', createAlgorithm);
+  await userEvent.click(screen.getByTestId('record-practice'));
+  await fillManualDraft('旧草稿');
+  await userEvent.click(screen.getByRole('button', { name: '添加主要算法' }));
+  await userEvent.type(screen.getByLabelText('算法名称'), '旧算法');
+  await userEvent.click(screen.getByRole('button', { name: '创建分类' }));
+  await waitFor(() => expect(createAlgorithm).toHaveBeenCalledOnce());
+
+  await act(async () => {
+    screen.getByRole('link', { name: '数据管理' }).click();
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/data');
+    create.resolve({ id: 'old', name: '旧算法', color: '#2563eb', createdAt: '' });
+    await flushMicrotasks();
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/data');
+  });
+
+  expect(`${window.location.pathname}${window.location.search}`).toBe('/data');
+  expect(screen.queryByRole('dialog', { name: '记录练习' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/正在为本次练习添加/)).not.toBeInTheDocument();
+});
+
+it('isolates a new algorithm request from the pending manager state of the previous request', async () => {
+  const firstCreate = deferred<Algorithm>();
+  const secondAlgorithm = { id: 'new', name: '新算法', color: '#2563eb', createdAt: '' };
+  const createAlgorithm = vi.fn()
+    .mockReturnValueOnce(firstCreate.promise)
+    .mockResolvedValueOnce(secondAlgorithm);
+  renderApp('/', createAlgorithm);
+
+  await userEvent.click(screen.getByTestId('record-practice'));
+  await fillManualDraft('旧草稿');
+  await userEvent.click(screen.getByRole('button', { name: '添加主要算法' }));
+  await userEvent.type(screen.getByLabelText('算法名称'), '旧算法');
+  await userEvent.click(screen.getByRole('button', { name: '创建分类' }));
+  await waitFor(() => expect(createAlgorithm).toHaveBeenCalledOnce());
+
+  await userEvent.click(screen.getByTestId('record-practice'));
+  await fillManualDraft('新草稿');
+  await userEvent.click(screen.getByRole('button', { name: '添加辅助算法' }));
+
+  const secondNameInput = screen.getByLabelText('算法名称');
+  expect(secondNameInput).toHaveValue('');
+  await userEvent.type(secondNameInput, '新算法');
+  await waitFor(() => expect(screen.getByRole('button', { name: '创建分类' })).toBeEnabled());
+
+  await act(async () => {
+    firstCreate.resolve({ id: 'old', name: '旧算法', color: '#dc2626', createdAt: '' });
+    await flushMicrotasks();
+  });
+  expect(secondNameInput).toHaveValue('新算法');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '创建分类' })).toBeEnabled();
+
+  await userEvent.click(screen.getByRole('button', { name: '创建分类' }));
+  await waitFor(() => expect(createAlgorithm).toHaveBeenCalledTimes(2));
+  const restored = within(await screen.findByRole('dialog', { name: '记录练习' }));
+  expect(restored.getByRole('textbox', { name: '解题思路' })).toHaveValue('新草稿');
+  expect(restored.getByRole('checkbox', { name: '新算法' })).toBeChecked();
 });
